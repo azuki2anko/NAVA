@@ -1,0 +1,38 @@
+bin/
+obj/
+.vs/
+*.user
+*.suo
+TestResults/
+artifacts/
+publish/
+*.log
+*.jsonl
+
+# Local/private edition overlays must never enter the public repository.
+.private/
+private/
+src/RxV4A.Private*/
+tests/RxV4A.Private*/
+*.Private.sln
+*.Private.slnx
+
+# Runtime settings, environment overrides, and credentials.
+settings.json
+appsettings.Local.json
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.snk
+*.key
+*.pem
+secrets.json
+
+# Local IDE and operating-system state.
+.idea/
+.vscode/
+*.DotSettings.user
+Thumbs.db
+Desktop.ini
