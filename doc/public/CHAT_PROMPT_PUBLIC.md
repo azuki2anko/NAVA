@@ -4,7 +4,7 @@
 
 ---
 
-このワークスペースで、Windows 11 x64向け「RX-V4A Manager 公開版（コア）」の設計・実装を引き継いでください。
+このワークスペースで、Windows 11 x64向け「RX-V4A Manager 公開版（コア）」の設計・実装を引き継いでください。実機確認対象はRX-V4Aだけとし、ほかのYamaha Extended Control対応アンプは公式仕様と`getFeatures`に基づく互換動作として扱ってください。
 
 ワークスペースは、この文書を含むリポジトリのルートです。
 
@@ -25,9 +25,9 @@
 公開版へ含める主要領域:
 
 - .NET 10 LTS / WPF / Windows 11 x64
-- Yamaha Extended Control APIのCapability駆動クライアント
+- Yamaha Extended Control APIのCapability駆動クライアント（モデル名の固定許可リストを使用しない）
 - 保存済み／手動接続、SSDP、Windows近隣キャッシュ、確認付きping探索
-- `getDeviceInfo`、`getFeatures`、Main Zone状態と公開Yamaha APIの段階的対応
+- `getDeviceInfo`、`getFeatures`、Main Zone状態と、PC用アンプの日常操作を優先した公開Yamaha API対応
 - シンプルなWPF画面、タスクトレイ、最前面ミニ電源トグル
 - localhost REST APIとOpenAPI
 - Ctrl／Alt／Shift + F13～F24の汎用グローバルホットキー
@@ -51,6 +51,8 @@
 - ローカルAPIは既定で`127.0.0.1`だけに公開する。
 - 任意のLAN公開では読み取り用／操作用トークンを分離する。
 - 未文書化APIは公開API不足の証拠を示し、私の明示了承を得るまで使用しない。
+- RX-V4A以外の機種を実機確認済みまたは動作保証対象として記載しない。
+- Tuner／ラジオ機能は要件が確定するまで保留する。
 - Alexa、自宅サーバー、PVE／Ubuntu常駐、Windowsサービスをスコープへ戻さない。
 - Power-on blockerは重複可能とし、全解除まで自動ONを拒否する。解除だけで自動ONせず、blocker中の外部ONも自動OFFしない。
 

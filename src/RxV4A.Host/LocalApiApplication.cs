@@ -112,7 +112,7 @@ public static class LocalApiApplication
             var capabilities = manager.Snapshot.Capabilities;
             if (capabilities is null)
             {
-                return ApiError(StatusCodes.Status503ServiceUnavailable, "device_unavailable", "RX-V4Aに接続されていません。");
+                return ApiError(StatusCodes.Status503ServiceUnavailable, "device_unavailable", "対応アンプに接続されていません。");
             }
 
             return Results.Ok(new
@@ -123,6 +123,10 @@ public static class LocalApiApplication
                     zone.Id,
                     functions = zone.Functions,
                     inputs = zone.Inputs.Select(input => input.Id),
+                    soundPrograms = zone.SoundPrograms,
+                    surroundDecoderTypes = zone.SurroundDecoderTypes,
+                    toneControlModes = zone.ToneControlModes,
+                    equalizerModes = zone.EqualizerModes,
                     ranges = zone.Ranges,
                     sceneCount = zone.SceneCount
                 })
@@ -142,6 +146,14 @@ public static class LocalApiApplication
                     snapshot.MainZone.Mute,
                     snapshot.MainZone.SoundProgram,
                     snapshot.MainZone.SurroundDecoderType,
+                    snapshot.MainZone.Surround3d,
+                    snapshot.MainZone.Direct,
+                    snapshot.MainZone.PureDirect,
+                    snapshot.MainZone.Enhancer,
+                    snapshot.MainZone.ToneControl,
+                    snapshot.MainZone.Equalizer,
+                    snapshot.MainZone.Balance,
+                    snapshot.MainZone.ActualVolume,
                     snapshot.MainZone.Headphone,
                     snapshot.UpdatedAt
                 });
@@ -177,6 +189,96 @@ public static class LocalApiApplication
             var result = await orchestrator.SetPowerAsync(power, false, cancellationToken).ConfigureAwait(false);
             return ControlResult(result);
         }).WithName("SetMainZonePower");
+
+        api.MapPut("/zones/main/input", (
+            InputRequest request,
+            IDeviceManager manager,
+            CancellationToken cancellationToken) =>
+            ExecuteDeviceCommandAsync(
+                () => manager.SetMainInputAsync(request.Input, cancellationToken)))
+            .WithName("SetMainZoneInput");
+
+        api.MapPut("/zones/main/volume", (
+            VolumeRequest request,
+            IDeviceManager manager,
+            CancellationToken cancellationToken) =>
+            ExecuteDeviceCommandAsync(
+                () => manager.SetMainVolumeAsync(request.Volume, cancellationToken)))
+            .WithName("SetMainZoneVolume");
+
+        api.MapPut("/zones/main/mute", (
+            EnabledRequest request,
+            IDeviceManager manager,
+            CancellationToken cancellationToken) =>
+            ExecuteDeviceCommandAsync(
+                () => manager.SetMainMuteAsync(request.Enable, cancellationToken)))
+            .WithName("SetMainZoneMute");
+
+        api.MapPut("/zones/main/sound-program", (
+            SoundProgramRequest request,
+            IDeviceManager manager,
+            CancellationToken cancellationToken) =>
+            ExecuteDeviceCommandAsync(
+                () => manager.SetMainSoundProgramAsync(request.Program, cancellationToken)))
+            .WithName("SetMainZoneSoundProgram");
+
+        api.MapPut("/zones/main/processing/3d-surround", (
+            EnabledRequest request,
+            IDeviceManager manager,
+            CancellationToken cancellationToken) =>
+            ExecuteDeviceCommandAsync(
+                () => manager.SetMainSurround3dAsync(request.Enable, cancellationToken)))
+            .WithName("SetMainZone3dSurround");
+
+        api.MapPut("/zones/main/processing/direct", (
+            EnabledRequest request,
+            IDeviceManager manager,
+            CancellationToken cancellationToken) =>
+            ExecuteDeviceCommandAsync(
+                () => manager.SetMainDirectAsync(request.Enable, cancellationToken)))
+            .WithName("SetMainZoneDirect");
+
+        api.MapPut("/zones/main/processing/pure-direct", (
+            EnabledRequest request,
+            IDeviceManager manager,
+            CancellationToken cancellationToken) =>
+            ExecuteDeviceCommandAsync(
+                () => manager.SetMainPureDirectAsync(request.Enable, cancellationToken)))
+            .WithName("SetMainZonePureDirect");
+
+        api.MapPut("/zones/main/processing/enhancer", (
+            EnabledRequest request,
+            IDeviceManager manager,
+            CancellationToken cancellationToken) =>
+            ExecuteDeviceCommandAsync(
+                () => manager.SetMainEnhancerAsync(request.Enable, cancellationToken)))
+            .WithName("SetMainZoneEnhancer");
+
+        api.MapPut("/zones/main/tone", (
+            ToneControlRequest request,
+            IDeviceManager manager,
+            CancellationToken cancellationToken) =>
+            ExecuteDeviceCommandAsync(() => manager.SetMainToneControlAsync(
+                new ToneControlSettings(request.Mode, request.Bass, request.Treble),
+                cancellationToken)))
+            .WithName("SetMainZoneToneControl");
+
+        api.MapPut("/zones/main/equalizer", (
+            EqualizerRequest request,
+            IDeviceManager manager,
+            CancellationToken cancellationToken) =>
+            ExecuteDeviceCommandAsync(() => manager.SetMainEqualizerAsync(
+                new EqualizerSettings(request.Mode, request.Low, request.Mid, request.High),
+                cancellationToken)))
+            .WithName("SetMainZoneEqualizer");
+
+        api.MapPut("/zones/main/balance", (
+            BalanceRequest request,
+            IDeviceManager manager,
+            CancellationToken cancellationToken) =>
+            ExecuteDeviceCommandAsync(
+                () => manager.SetMainBalanceAsync(request.Value, cancellationToken)))
+            .WithName("SetMainZoneBalance");
 
         api.MapGet("/activities", (IControlOrchestrator orchestrator) =>
             Results.Ok(orchestrator.GetActivities()))
@@ -336,6 +438,47 @@ public static class LocalApiApplication
         }, statusCode: statusCode);
     }
 
+    private static async Task<IResult> ExecuteDeviceCommandAsync(Func<Task<DeviceSnapshot>> command)
+    {
+        try
+        {
+            var snapshot = await command().ConfigureAwait(false);
+            return Results.Ok(new
+            {
+                connection = snapshot.ConnectionState.ToString().ToLowerInvariant(),
+                snapshot.MainZone,
+                snapshot.UpdatedAt
+            });
+        }
+        catch (DeviceUnavailableException exception)
+        {
+            return ApiError(StatusCodes.Status503ServiceUnavailable, "device_unavailable", exception.Message);
+        }
+        catch (CapabilityNotSupportedException exception)
+        {
+            return ApiError(
+                StatusCodes.Status422UnprocessableEntity,
+                "capability_not_supported",
+                exception.Message);
+        }
+        catch (ArgumentException exception)
+        {
+            return ApiError(StatusCodes.Status400BadRequest, "invalid_value", exception.Message);
+        }
+        catch (OperationCanceledException)
+        {
+            return ApiError(StatusCodes.Status504GatewayTimeout, "timeout", "アンプ操作がタイムアウトしました。");
+        }
+        catch (YamahaException)
+        {
+            return ApiError(StatusCodes.Status502BadGateway, "device_error", "アンプが操作を完了できませんでした。");
+        }
+        catch (HttpRequestException)
+        {
+            return ApiError(StatusCodes.Status503ServiceUnavailable, "device_unavailable", "アンプと通信できません。");
+        }
+    }
+
     private static IResult ApiError(int statusCode, string code, string message) =>
         Results.Json(new { code, message }, statusCode: statusCode);
 
@@ -353,6 +496,20 @@ public static class LocalApiApplication
     }
 
     public sealed record PowerRequest(string Power, bool Force = false);
+
+    public sealed record InputRequest(string Input);
+
+    public sealed record VolumeRequest(decimal Volume);
+
+    public sealed record EnabledRequest(bool Enable);
+
+    public sealed record SoundProgramRequest(string Program);
+
+    public sealed record ToneControlRequest(string? Mode, decimal? Bass, decimal? Treble);
+
+    public sealed record EqualizerRequest(string? Mode, decimal? Low, decimal? Mid, decimal? High);
+
+    public sealed record BalanceRequest(decimal Value);
 }
 
 public sealed record LocalApiExtension(

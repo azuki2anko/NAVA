@@ -4,31 +4,21 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="RX-V4A Manager" Height="650" Width="720"
+        Title="RX-V4A Manager" Height="820" Width="780"
         Icon="Assets/RxV4AManager.ico"
-        MinHeight="580" MinWidth="650"
+        MinHeight="640" MinWidth="680"
         WindowStartupLocation="CenterScreen"
         Closing="Window_Closing"
         StateChanged="Window_StateChanged">
-    <Grid Margin="24">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="16" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="16" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="16" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
-
-        <StackPanel Grid.Row="0">
+    <Grid>
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="24">
+        <StackPanel>
             <TextBlock Text="RX-V4A Manager" FontSize="28" FontWeight="SemiBold" />
-            <TextBlock Text="Capability駆動の安全な基本操作" Foreground="Gray" Margin="0,4,0,0" />
+            <TextBlock Text="PC用アンプとしての日常操作（Capability駆動）" Foreground="Gray" Margin="0,4,0,0" />
         </StackPanel>
 
-        <Border Grid.Row="2" BorderBrush="#D0D0D0" BorderThickness="1" CornerRadius="8" Padding="16">
+        <Border BorderBrush="#D0D0D0" BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,16,0,0">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="140" />
@@ -54,7 +44,7 @@
             </Grid>
         </Border>
 
-        <StackPanel Grid.Row="4">
+        <StackPanel Margin="0,16,0,0">
             <TextBlock x:Name="BlockerWarningText" Visibility="Collapsed" Foreground="#C62828"
                        FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,10" />
             <UniformGrid Columns="2" Rows="1">
@@ -67,7 +57,129 @@
                     Click="RefreshButton_Click" />
         </StackPanel>
 
-        <Border Grid.Row="6" BorderBrush="#D0D0D0" BorderThickness="1" CornerRadius="8" Padding="16">
+        <Border x:Name="DailyControlsPanel" BorderBrush="#D0D0D0" BorderThickness="1"
+                CornerRadius="8" Padding="16" Margin="0,16,0,0">
+            <StackPanel>
+                <TextBlock Text="日常操作" FontSize="18" FontWeight="SemiBold" />
+
+                <Grid x:Name="InputPanel" Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="130" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="90" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="ソース" VerticalAlignment="Center" />
+                    <ComboBox Grid.Column="1" x:Name="InputComboBox" Height="30" />
+                    <Button Grid.Column="2" x:Name="SetInputButton" Content="切り替え" Margin="10,0,0,0"
+                            Click="SetInputButton_Click" />
+                </Grid>
+
+                <Grid x:Name="VolumePanel" Margin="0,10,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="130" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="72" />
+                        <ColumnDefinition Width="90" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="音量" VerticalAlignment="Center" />
+                    <Slider Grid.Column="1" x:Name="VolumeSlider" VerticalAlignment="Center"
+                            IsSnapToTickEnabled="True" TickPlacement="None"
+                            ValueChanged="VolumeSlider_ValueChanged" />
+                    <TextBlock Grid.Column="2" x:Name="VolumeValueText" Text="—" TextAlignment="Right"
+                               VerticalAlignment="Center" Margin="8,0,0,0" />
+                    <Button Grid.Column="3" x:Name="SetVolumeButton" Content="設定" Margin="10,0,0,0"
+                            Click="SetVolumeButton_Click" />
+                </Grid>
+
+                <Grid x:Name="MutePanel" Margin="0,10,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="130" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="ミュート" VerticalAlignment="Center" />
+                    <CheckBox Grid.Column="1" x:Name="MuteCheckBox" Content="有効"
+                              Click="MuteCheckBox_Click" />
+                </Grid>
+
+                <Grid x:Name="SoundProgramPanel" Margin="0,10,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="130" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="90" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="音場プログラム" VerticalAlignment="Center" />
+                    <ComboBox Grid.Column="1" x:Name="SoundProgramComboBox" Height="30" />
+                    <Button Grid.Column="2" x:Name="SetSoundProgramButton" Content="設定" Margin="10,0,0,0"
+                            Click="SetSoundProgramButton_Click" />
+                </Grid>
+
+                <WrapPanel x:Name="ProcessingPanel" Margin="0,12,0,0">
+                    <CheckBox x:Name="Surround3dCheckBox" Content="3D Surround" Margin="0,0,18,8"
+                              Click="Surround3dCheckBox_Click" />
+                    <CheckBox x:Name="DirectCheckBox" Content="Direct" Margin="0,0,18,8"
+                              Click="DirectCheckBox_Click" />
+                    <CheckBox x:Name="PureDirectCheckBox" Content="Pure Direct" Margin="0,0,18,8"
+                              Click="PureDirectCheckBox_Click" />
+                    <CheckBox x:Name="EnhancerCheckBox" Content="Enhancer" Margin="0,0,18,8"
+                              Click="EnhancerCheckBox_Click" />
+                </WrapPanel>
+
+                <Grid x:Name="TonePanel" Margin="0,6,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="130" />
+                        <ColumnDefinition Width="110" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="90" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="トーン" VerticalAlignment="Center" />
+                    <ComboBox Grid.Column="1" x:Name="ToneModeComboBox" Height="30" Margin="0,0,8,0" />
+                    <TextBox Grid.Column="2" x:Name="BassTextBox" Height="30" Margin="0,0,8,0"
+                             ToolTip="Bass" VerticalContentAlignment="Center" />
+                    <TextBox Grid.Column="3" x:Name="TrebleTextBox" Height="30" Margin="0,0,8,0"
+                             ToolTip="Treble" VerticalContentAlignment="Center" />
+                    <Button Grid.Column="4" Content="設定" Click="SetToneButton_Click" />
+                </Grid>
+
+                <Grid x:Name="EqualizerPanel" Margin="0,10,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="130" />
+                        <ColumnDefinition Width="110" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="90" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="EQ" VerticalAlignment="Center" />
+                    <ComboBox Grid.Column="1" x:Name="EqualizerModeComboBox" Height="30" Margin="0,0,8,0" />
+                    <TextBox Grid.Column="2" x:Name="EqualizerLowTextBox" Height="30" Margin="0,0,8,0"
+                             ToolTip="Low" VerticalContentAlignment="Center" />
+                    <TextBox Grid.Column="3" x:Name="EqualizerMidTextBox" Height="30" Margin="0,0,8,0"
+                             ToolTip="Mid" VerticalContentAlignment="Center" />
+                    <TextBox Grid.Column="4" x:Name="EqualizerHighTextBox" Height="30" Margin="0,0,8,0"
+                             ToolTip="High" VerticalContentAlignment="Center" />
+                    <Button Grid.Column="5" Content="設定" Click="SetEqualizerButton_Click" />
+                </Grid>
+
+                <Grid x:Name="BalancePanel" Margin="0,10,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="130" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="90" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="バランス" VerticalAlignment="Center" />
+                    <TextBox Grid.Column="1" x:Name="BalanceTextBox" Height="30"
+                             ToolTip="負数=左、正数=右" VerticalContentAlignment="Center" />
+                    <Button Grid.Column="2" Content="設定" Margin="10,0,0,0"
+                            Click="SetBalanceButton_Click" />
+                </Grid>
+
+                <TextBlock x:Name="CapabilityNoteText" Foreground="Gray" Margin="0,12,0,0"
+                           Text="接続機器が公式APIで広告した操作だけを表示します。" TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+
+        <Border BorderBrush="#D0D0D0" BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,16,0,0">
             <StackPanel>
                 <TextBlock Text="接続先" FontSize="16" FontWeight="SemiBold" />
                 <TextBlock Text="空欄なら保存済み接続先、SSDP、Windows近隣キャッシュの順に探索します。IPアドレスまたはホスト名だけを指定できます。"
@@ -98,7 +210,9 @@
             </StackPanel>
         </Border>
 
-        <TextBlock Grid.Row="8" Text="ローカルAPI: http://127.0.0.1:55274/api/v1  ·  OpenAPI: /openapi/v1.json"
-                   Foreground="Gray" HorizontalAlignment="Center" />
+        <TextBlock Text="ローカルAPI: http://127.0.0.1:55274/api/v1  ·  OpenAPI: /openapi/v1.json"
+                   Foreground="Gray" HorizontalAlignment="Center" Margin="0,16,0,0" />
+        </StackPanel>
+        </ScrollViewer>
     </Grid>
 </Window>

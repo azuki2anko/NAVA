@@ -289,6 +289,39 @@ public sealed class ControlOrchestratorTests
             return Task.FromResult(_snapshot);
         }
 
+        public Task<DeviceSnapshot> SetMainVolumeAsync(decimal volume, CancellationToken cancellationToken = default) =>
+            Task.FromResult(_snapshot);
+
+        public Task<DeviceSnapshot> SetMainMuteAsync(bool enabled, CancellationToken cancellationToken = default) =>
+            Task.FromResult(_snapshot);
+
+        public Task<DeviceSnapshot> SetMainSoundProgramAsync(
+            string programId,
+            CancellationToken cancellationToken = default) => Task.FromResult(_snapshot);
+
+        public Task<DeviceSnapshot> SetMainSurround3dAsync(bool enabled, CancellationToken cancellationToken = default) =>
+            Task.FromResult(_snapshot);
+
+        public Task<DeviceSnapshot> SetMainDirectAsync(bool enabled, CancellationToken cancellationToken = default) =>
+            Task.FromResult(_snapshot);
+
+        public Task<DeviceSnapshot> SetMainPureDirectAsync(bool enabled, CancellationToken cancellationToken = default) =>
+            Task.FromResult(_snapshot);
+
+        public Task<DeviceSnapshot> SetMainEnhancerAsync(bool enabled, CancellationToken cancellationToken = default) =>
+            Task.FromResult(_snapshot);
+
+        public Task<DeviceSnapshot> SetMainToneControlAsync(
+            ToneControlSettings settings,
+            CancellationToken cancellationToken = default) => Task.FromResult(_snapshot);
+
+        public Task<DeviceSnapshot> SetMainEqualizerAsync(
+            EqualizerSettings settings,
+            CancellationToken cancellationToken = default) => Task.FromResult(_snapshot);
+
+        public Task<DeviceSnapshot> SetMainBalanceAsync(decimal value, CancellationToken cancellationToken = default) =>
+            Task.FromResult(_snapshot);
+
         public Task<DeviceSnapshot> RecallMainSceneAsync(
             int sceneNumber,
             CancellationToken cancellationToken = default)

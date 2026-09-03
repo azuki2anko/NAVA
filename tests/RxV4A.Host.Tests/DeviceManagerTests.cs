@@ -34,6 +34,31 @@ public sealed class DeviceManagerTests
     }
 
     [Fact]
+    public async Task CompatibleModelName_IsAcceptedFromAdvertisedCapabilities()
+    {
+        using var fixture = new ManagerFixture(includePowerCapability: true);
+        fixture.Client.DeviceModels.Enqueue("RX-V6A");
+
+        await fixture.Manager.RefreshAsync(CancellationToken.None);
+
+        Assert.Equal(DeviceConnectionState.Connected, fixture.Manager.Snapshot.ConnectionState);
+        Assert.Equal("RX-V6A", fixture.Manager.Snapshot.Capabilities?.DeviceInfo.ModelName);
+    }
+
+    [Fact]
+    public async Task Volume_IsValidatedAgainstAdvertisedRange()
+    {
+        using var fixture = new ManagerFixture(includePowerCapability: true);
+        await fixture.Manager.RefreshAsync(CancellationToken.None);
+
+        await fixture.Manager.SetMainVolumeAsync(-35.5m, CancellationToken.None);
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            fixture.Manager.SetMainVolumeAsync(-35.25m, CancellationToken.None));
+
+        Assert.Equal([-35.5m], fixture.Client.VolumeCommands);
+    }
+
+    [Fact]
     public async Task FailedPoll_MarksDisconnected_AndNextRefreshReconnects()
     {
         using var fixture = new ManagerFixture(includePowerCapability: true);
@@ -154,8 +179,8 @@ public sealed class DeviceManagerTests
         {
             var settings = new AppSettings { RequestTimeoutSeconds = 2 };
             var client = new FakeYamahaClient(includePowerCapability: true);
-            client.DeviceModels.Enqueue("OTHER-DEVICE");
-            client.DeviceModels.Enqueue("RX-V4A");
+            client.CompatibleFeatureResponses.Enqueue(false);
+            client.CompatibleFeatureResponses.Enqueue(true);
             var ping = new FakePingDiscovery("receiver.test");
             using var manager = new DeviceManager(
                 settings,
@@ -186,7 +211,7 @@ public sealed class DeviceManagerTests
         {
             var settings = new AppSettings { RequestTimeoutSeconds = 2 };
             var client = new FakeYamahaClient(includePowerCapability: true);
-            client.DeviceModels.Enqueue("OTHER-DEVICE");
+            client.CompatibleFeatureResponses.Enqueue(false);
             var ping = new FakePingDiscovery("receiver.test", requiresConfirmation: true);
             using var manager = new DeviceManager(
                 settings,
@@ -352,7 +377,11 @@ public sealed class DeviceManagerTests
 
         public List<MainPower> PowerCommands { get; } = [];
 
+        public List<decimal> VolumeCommands { get; } = [];
+
         public Queue<string> DeviceModels { get; } = [];
+
+        public Queue<bool> CompatibleFeatureResponses { get; } = [];
 
         public Task<DeviceInfoResponse> GetDeviceInfoAsync(CancellationToken cancellationToken)
         {
@@ -374,6 +403,7 @@ public sealed class DeviceManagerTests
         public Task<FeaturesResponse> GetFeaturesAsync(CancellationToken cancellationToken)
         {
             FeaturesCalls++;
+            var compatible = !CompatibleFeatureResponses.TryDequeue(out var queued) || queued;
             return Task.FromResult(new FeaturesResponse
             {
                 Zones =
@@ -381,7 +411,14 @@ public sealed class DeviceManagerTests
                     new ZoneFeatures
                     {
                         Id = "main",
-                        Functions = includePowerCapability ? ["power", "volume"] : ["volume"]
+                        Functions = compatible
+                            ? includePowerCapability ? ["power", "volume"] : ["volume"]
+                            : ["scene"],
+                        Inputs = compatible ? [new InputFeature { Id = "hdmi1" }] : []
+                        ,
+                        Ranges = compatible
+                            ? [new RangeStepFeature { Id = "volume", Minimum = -80.5m, Maximum = 16.5m, Step = 0.5m }]
+                            : []
                     }
                 ]
             });
@@ -418,6 +455,33 @@ public sealed class DeviceManagerTests
 
         public Task SetMainInputAsync(string inputId, CancellationToken cancellationToken) =>
             Task.CompletedTask;
+
+        public Task SetMainVolumeAsync(decimal volume, CancellationToken cancellationToken)
+        {
+            VolumeCommands.Add(volume);
+            return Task.CompletedTask;
+        }
+
+        public Task SetMainMuteAsync(bool enabled, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task SetMainSoundProgramAsync(string programId, CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+
+        public Task SetMainSurround3dAsync(bool enabled, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task SetMainDirectAsync(bool enabled, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task SetMainPureDirectAsync(bool enabled, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task SetMainEnhancerAsync(bool enabled, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task SetMainToneControlAsync(ToneControlSettings settings, CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+
+        public Task SetMainEqualizerAsync(EqualizerSettings settings, CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+
+        public Task SetMainBalanceAsync(decimal value, CancellationToken cancellationToken) => Task.CompletedTask;
 
         public Task RecallMainSceneAsync(int sceneNumber, CancellationToken cancellationToken) =>
             Task.CompletedTask;

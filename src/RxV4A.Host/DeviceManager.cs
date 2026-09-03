@@ -78,7 +78,7 @@ public sealed class DeviceManager(
         await _operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var client = _client ?? throw new DeviceUnavailableException("RX-V4Aに接続されていません。");
+            var client = _client ?? throw new DeviceUnavailableException("対応アンプに接続されていません。");
             var capabilities = capabilityStore.Current
                 ?? throw new DeviceUnavailableException("Capabilityを取得できていません。");
             if (!capabilities.SupportsZoneFunction("main", "power"))
@@ -128,7 +128,7 @@ public sealed class DeviceManager(
         await _operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var client = _client ?? throw new DeviceUnavailableException("RX-V4Aに接続されていません。");
+            var client = _client ?? throw new DeviceUnavailableException("対応アンプに接続されていません。");
             var capabilities = capabilityStore.Current
                 ?? throw new DeviceUnavailableException("Capabilityを取得できていません。");
             var zone = capabilities.FindZone("main")
@@ -158,6 +158,123 @@ public sealed class DeviceManager(
         }
     }
 
+    public Task<DeviceSnapshot> SetMainVolumeAsync(
+        decimal volume,
+        CancellationToken cancellationToken = default) =>
+        ExecuteMainZoneCommandAsync(
+            "volume",
+            (capabilities, _) => ValidateRangedValue(capabilities, "volume", volume),
+            (client, token) => client.SetMainVolumeAsync(volume, token),
+            cancellationToken);
+
+    public Task<DeviceSnapshot> SetMainMuteAsync(
+        bool enabled,
+        CancellationToken cancellationToken = default) =>
+        ExecuteMainZoneCommandAsync(
+            "mute",
+            null,
+            (client, token) => client.SetMainMuteAsync(enabled, token),
+            cancellationToken);
+
+    public Task<DeviceSnapshot> SetMainSoundProgramAsync(
+        string programId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(programId))
+        {
+            throw new ArgumentException("A sound program id is required.", nameof(programId));
+        }
+
+        var normalized = programId.Trim();
+        return ExecuteMainZoneCommandAsync(
+            "sound_program",
+            (_, zone) => ValidateListedValue(zone.SoundPrograms, normalized, $"main.sound_program.{normalized}"),
+            (client, token) => client.SetMainSoundProgramAsync(normalized, token),
+            cancellationToken);
+    }
+
+    public Task<DeviceSnapshot> SetMainSurround3dAsync(
+        bool enabled,
+        CancellationToken cancellationToken = default) =>
+        ExecuteMainZoneCommandAsync(
+            "surround_3d",
+            null,
+            (client, token) => client.SetMainSurround3dAsync(enabled, token),
+            cancellationToken);
+
+    public Task<DeviceSnapshot> SetMainDirectAsync(
+        bool enabled,
+        CancellationToken cancellationToken = default) =>
+        ExecuteMainZoneCommandAsync(
+            "direct",
+            null,
+            (client, token) => client.SetMainDirectAsync(enabled, token),
+            cancellationToken);
+
+    public Task<DeviceSnapshot> SetMainPureDirectAsync(
+        bool enabled,
+        CancellationToken cancellationToken = default) =>
+        ExecuteMainZoneCommandAsync(
+            "pure_direct",
+            null,
+            (client, token) => client.SetMainPureDirectAsync(enabled, token),
+            cancellationToken);
+
+    public Task<DeviceSnapshot> SetMainEnhancerAsync(
+        bool enabled,
+        CancellationToken cancellationToken = default) =>
+        ExecuteMainZoneCommandAsync(
+            "enhancer",
+            null,
+            (client, token) => client.SetMainEnhancerAsync(enabled, token),
+            cancellationToken);
+
+    public Task<DeviceSnapshot> SetMainToneControlAsync(
+        ToneControlSettings values,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        return ExecuteMainZoneCommandAsync(
+            "tone_control",
+            (capabilities, zone) =>
+            {
+                ValidateMode(zone.ToneControlModes, values.Mode, "main.tone_control.mode");
+                ValidateOptionalRangedValue(capabilities, "tone_control", values.Bass);
+                ValidateOptionalRangedValue(capabilities, "tone_control", values.Treble);
+                RequireAtLeastOneValue(values.Mode, values.Bass, values.Treble);
+            },
+            (client, token) => client.SetMainToneControlAsync(values, token),
+            cancellationToken);
+    }
+
+    public Task<DeviceSnapshot> SetMainEqualizerAsync(
+        EqualizerSettings values,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        return ExecuteMainZoneCommandAsync(
+            "equalizer",
+            (capabilities, zone) =>
+            {
+                ValidateMode(zone.EqualizerModes, values.Mode, "main.equalizer.mode");
+                ValidateOptionalRangedValue(capabilities, "equalizer", values.Low);
+                ValidateOptionalRangedValue(capabilities, "equalizer", values.Mid);
+                ValidateOptionalRangedValue(capabilities, "equalizer", values.High);
+                RequireAtLeastOneValue(values.Mode, values.Low, values.Mid, values.High);
+            },
+            (client, token) => client.SetMainEqualizerAsync(values, token),
+            cancellationToken);
+    }
+
+    public Task<DeviceSnapshot> SetMainBalanceAsync(
+        decimal value,
+        CancellationToken cancellationToken = default) =>
+        ExecuteMainZoneCommandAsync(
+            "balance",
+            (capabilities, _) => ValidateRangedValue(capabilities, "balance", value),
+            (client, token) => client.SetMainBalanceAsync(value, token),
+            cancellationToken);
+
     public async Task<DeviceSnapshot> RecallMainSceneAsync(
         int sceneNumber,
         CancellationToken cancellationToken = default)
@@ -165,7 +282,7 @@ public sealed class DeviceManager(
         await _operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var client = _client ?? throw new DeviceUnavailableException("RX-V4Aに接続されていません。");
+            var client = _client ?? throw new DeviceUnavailableException("対応アンプに接続されていません。");
             var capabilities = capabilityStore.Current
                 ?? throw new DeviceUnavailableException("Capabilityを取得できていません。");
             var zone = capabilities.FindZone("main")
@@ -483,13 +600,6 @@ public sealed class DeviceManager(
                 }
             }
 
-            if (!string.Equals(deviceInfo.ModelName, "RX-V4A", StringComparison.OrdinalIgnoreCase))
-            {
-                sawUnsupportedDevice = true;
-                modelMismatches++;
-                continue;
-            }
-
             if (string.IsNullOrWhiteSpace(settings.ManualHost) &&
                 !string.IsNullOrWhiteSpace(settings.PreferredDeviceId) &&
                 !string.Equals(settings.PreferredDeviceId, deviceInfo.DeviceId, StringComparison.Ordinal))
@@ -511,7 +621,14 @@ public sealed class DeviceManager(
                 continue;
             }
 
-            AdvancedFeaturesResponse advancedFeatures;
+            if (!IsCompatibleDevice(deviceInfo, features))
+            {
+                sawUnsupportedDevice = true;
+                modelMismatches++;
+                continue;
+            }
+
+            var advancedFeatures = new AdvancedFeaturesResponse { ResponseCode = 0 };
             try
             {
                 using var timeout = CreateTimeout(cancellationToken);
@@ -521,7 +638,6 @@ public sealed class DeviceManager(
                 exception is YamahaException or HttpRequestException or TaskCanceledException)
             {
                 advancedFeatureFailures++;
-                continue;
             }
 
             MainZoneStatusResponse mainStatus;
@@ -575,7 +691,7 @@ public sealed class DeviceManager(
                 capabilities,
                 mainStatus,
                 DateTimeOffset.UtcNow));
-            logger.LogInformation("RX-V4A connected and capabilities refreshed.");
+            logger.LogInformation("Compatible Yamaha device connected and capabilities refreshed.");
             return new CandidateConnectionResult(
                 true,
                 sawUnsupportedDevice,
@@ -631,7 +747,7 @@ public sealed class DeviceManager(
 
     private void LogCandidateValidation(string source, int candidateCount, CandidateConnectionResult result) =>
         logger.LogInformation(
-            "Candidate validation completed. Source={Source} CandidateCount={CandidateCount} Connected={Connected} DeviceInfoFailures={DeviceInfoFailures} ModelMismatches={ModelMismatches} PreferredDeviceMismatches={PreferredDeviceMismatches} FeatureFailures={FeatureFailures} AdvancedFeatureFailures={AdvancedFeatureFailures} StatusFailures={StatusFailures}",
+            "Candidate validation completed. Source={Source} CandidateCount={CandidateCount} Connected={Connected} DeviceInfoFailures={DeviceInfoFailures} CompatibilityMismatches={CompatibilityMismatches} PreferredDeviceMismatches={PreferredDeviceMismatches} FeatureFailures={FeatureFailures} AdvancedFeatureFailures={AdvancedFeatureFailures} StatusFailures={StatusFailures}",
             source,
             candidateCount,
             result.Connected,
@@ -653,6 +769,136 @@ public sealed class DeviceManager(
         int StatusFailures);
 
     private sealed record CandidateProbe(IYamahaClient Client, DeviceInfoResponse DeviceInfo);
+
+    private async Task<DeviceSnapshot> ExecuteMainZoneCommandAsync(
+        string capability,
+        Action<CapabilitySnapshot, ZoneFeatures>? validate,
+        Func<IYamahaClient, CancellationToken, Task> command,
+        CancellationToken cancellationToken)
+    {
+        await _operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var client = _client ?? throw new DeviceUnavailableException("対応アンプに接続されていません。");
+            var capabilities = capabilityStore.Current
+                ?? throw new DeviceUnavailableException("Capabilityを取得できていません。");
+            var zone = capabilities.FindZone("main")
+                ?? throw new CapabilityNotSupportedException("main");
+            if (!capabilities.SupportsZoneFunction("main", capability))
+            {
+                throw new CapabilityNotSupportedException($"main.{capability}");
+            }
+
+            validate?.Invoke(capabilities, zone);
+            using var timeout = CreateTimeout(cancellationToken);
+            await command(client, timeout.Token).ConfigureAwait(false);
+            var status = await client.GetMainZoneStatusAsync(timeout.Token).ConfigureAwait(false);
+            Publish(new DeviceSnapshot(
+                DeviceConnectionState.Connected,
+                capabilities,
+                status,
+                DateTimeOffset.UtcNow));
+            logger.LogInformation("Main Zone command completed. Capability={Capability}", capability);
+            return Snapshot;
+        }
+        finally
+        {
+            _operationGate.Release();
+        }
+    }
+
+    private static bool IsCompatibleDevice(DeviceInfoResponse deviceInfo, FeaturesResponse features)
+    {
+        if (string.IsNullOrWhiteSpace(deviceInfo.ModelName))
+        {
+            return false;
+        }
+
+        var main = features.Zones.FirstOrDefault(zone =>
+            string.Equals(zone.Id, "main", StringComparison.OrdinalIgnoreCase));
+        return main is not null &&
+               main.Inputs.Any(input => !string.IsNullOrWhiteSpace(input.Id)) &&
+               (main.Functions.Contains("power", StringComparer.OrdinalIgnoreCase) ||
+                main.Functions.Contains("volume", StringComparer.OrdinalIgnoreCase) ||
+                main.Functions.Contains("mute", StringComparer.OrdinalIgnoreCase));
+    }
+
+    private static void ValidateListedValue(
+        IReadOnlyList<string> choices,
+        string value,
+        string capability)
+    {
+        if (!choices.Contains(value, StringComparer.OrdinalIgnoreCase))
+        {
+            throw new CapabilityNotSupportedException(capability);
+        }
+    }
+
+    private static void ValidateMode(
+        IReadOnlyList<string> advertisedModes,
+        string? mode,
+        string capability)
+    {
+        if (string.IsNullOrWhiteSpace(mode))
+        {
+            return;
+        }
+
+        if (advertisedModes.Count == 0)
+        {
+            if (!string.Equals(mode, "manual", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new CapabilityNotSupportedException(capability);
+            }
+
+            return;
+        }
+
+        ValidateListedValue(advertisedModes, mode.Trim(), capability);
+    }
+
+    private static void ValidateOptionalRangedValue(
+        CapabilitySnapshot capabilities,
+        string rangeId,
+        decimal? value)
+    {
+        if (value.HasValue)
+        {
+            ValidateRangedValue(capabilities, rangeId, value.Value);
+        }
+    }
+
+    private static void ValidateRangedValue(
+        CapabilitySnapshot capabilities,
+        string rangeId,
+        decimal value)
+    {
+        var range = capabilities.FindZoneRange("main", rangeId)
+            ?? throw new CapabilityNotSupportedException($"main.{rangeId}.range");
+        if (range.Minimum is not decimal minimum ||
+            range.Maximum is not decimal maximum ||
+            range.Step is not decimal step ||
+            step <= 0)
+        {
+            throw new CapabilityNotSupportedException($"main.{rangeId}.range");
+        }
+
+        if (value < minimum || value > maximum || (value - minimum) % step != 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(value),
+                value,
+                $"Value must be between {minimum} and {maximum} in increments of {step}.");
+        }
+    }
+
+    private static void RequireAtLeastOneValue(params object?[] values)
+    {
+        if (values.All(value => value is null || value is string text && string.IsNullOrWhiteSpace(text)))
+        {
+            throw new ArgumentException("At least one setting value is required.", nameof(values));
+        }
+    }
 
     private async Task<PingSubnetDiscoveryResult> GetPingCandidatesAsync(CancellationToken cancellationToken)
     {
@@ -704,7 +950,7 @@ public sealed class DeviceManager(
         catch (Exception exception) when (exception is YamahaException or HttpRequestException or TaskCanceledException)
         {
             logger.LogWarning(
-                "RX-V4A status refresh failed. FailureType={FailureType}",
+                "Yamaha device status refresh failed. FailureType={FailureType}",
                 exception.GetType().Name);
             MarkDisconnected("device_unavailable");
         }

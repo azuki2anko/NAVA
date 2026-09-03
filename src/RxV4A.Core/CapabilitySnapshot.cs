@@ -14,6 +14,10 @@ public sealed record CapabilitySnapshot(
 
     public bool SupportsSystemFunction(string function) =>
         Features.System?.Functions.Contains(function, StringComparer.OrdinalIgnoreCase) == true;
+
+    public RangeStepFeature? FindZoneRange(string zoneId, string rangeId) =>
+        FindZone(zoneId)?.Ranges.FirstOrDefault(range =>
+            string.Equals(range.Id, rangeId, StringComparison.OrdinalIgnoreCase));
 }
 
 public interface ICapabilityStore

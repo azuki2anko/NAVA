@@ -40,6 +40,9 @@ public sealed class YamahaClientTests
                   "id": "main",
                   "func_list": ["power", "volume"],
                   "input_list": ["spotify", {"id":"hdmi1","future_value":42}],
+                  "sound_program_list": ["straight", "movie_standard"],
+                  "tone_control_mode_list": ["manual", "bypass"],
+                  "equalizer_mode_list": ["manual"],
                   "range_step": [{"id":"volume","min":-80.5,"max":16.5,"step":0.5}],
                   "scene_num": 4
                 }
@@ -58,7 +61,45 @@ public sealed class YamahaClientTests
         Assert.True(snapshot.SupportsZoneFunction("main", "power"));
         Assert.False(snapshot.SupportsZoneFunction("zone2", "power"));
         Assert.Equal(["spotify", "hdmi1"], snapshot.FindZone("main")!.Inputs.Select(input => input.Id));
+        Assert.Equal(["straight", "movie_standard"], snapshot.FindZone("main")!.SoundPrograms);
+        Assert.Equal(["manual", "bypass"], snapshot.FindZone("main")!.ToneControlModes);
         Assert.Equal(0.5m, snapshot.FindZone("main")!.Ranges.Single().Step);
+    }
+
+    [Fact]
+    public async Task MainStatus_DeserializesPcAmplifierControls()
+    {
+        const string json = """
+            {
+              "response_code": 0,
+              "volume": -35.5,
+              "mute": true,
+              "surround_3d": true,
+              "direct": false,
+              "pure_direct": true,
+              "enhancer": false,
+              "tone_control": {"mode":"manual","bass":1.0,"treble":-0.5},
+              "equalizer": {"mode":"manual","low":1,"mid":0,"high":-1},
+              "balance": -2,
+              "actual_volume": {"mode":"db","value":-35.5,"unit":"dB"}
+            }
+            """;
+        var client = new YamahaClient(
+            new HttpClient(new StubHttpMessageHandler(_ => JsonResponse(json))),
+            "receiver.test");
+
+        var status = await client.GetMainZoneStatusAsync(CancellationToken.None);
+
+        Assert.Equal(-35.5m, status.Volume);
+        Assert.True(status.Mute);
+        Assert.True(status.Surround3d);
+        Assert.False(status.Direct);
+        Assert.True(status.PureDirect);
+        Assert.False(status.Enhancer);
+        Assert.Equal(1m, status.ToneControl?.Bass);
+        Assert.Equal(-1m, status.Equalizer?.High);
+        Assert.Equal(-2m, status.Balance);
+        Assert.Equal("dB", status.ActualVolume?.Unit);
     }
 
     [Theory]
@@ -102,6 +143,42 @@ public sealed class YamahaClientTests
         Assert.EndsWith(
             "/YamahaExtendedControl/v1/main/recallScene?num=4",
             requestedUris[1].AbsoluteUri);
+    }
+
+    [Fact]
+    public async Task PcAmplifierCommands_UseDocumentedTypedEndpoints()
+    {
+        var paths = new List<string>();
+        var client = new YamahaClient(
+            new HttpClient(new StubHttpMessageHandler(request =>
+            {
+                paths.Add(request.RequestUri!.PathAndQuery);
+                return JsonResponse("{\"response_code\":0}");
+            })),
+            "receiver.test");
+
+        await client.SetMainVolumeAsync(-35.5m, CancellationToken.None);
+        await client.SetMainMuteAsync(true, CancellationToken.None);
+        await client.SetMainSoundProgramAsync("movie&standard", CancellationToken.None);
+        await client.SetMainSurround3dAsync(true, CancellationToken.None);
+        await client.SetMainDirectAsync(false, CancellationToken.None);
+        await client.SetMainPureDirectAsync(true, CancellationToken.None);
+        await client.SetMainEnhancerAsync(false, CancellationToken.None);
+        await client.SetMainToneControlAsync(new ToneControlSettings("manual", 1.5m, -0.5m), CancellationToken.None);
+        await client.SetMainEqualizerAsync(new EqualizerSettings("manual", 1m, 0m, -1m), CancellationToken.None);
+        await client.SetMainBalanceAsync(-2m, CancellationToken.None);
+
+        Assert.Collection(paths,
+            path => Assert.EndsWith("/main/setVolume?volume=-35.5", path),
+            path => Assert.EndsWith("/main/setMute?enable=true", path),
+            path => Assert.EndsWith("/main/setSoundProgram?program=movie%26standard", path),
+            path => Assert.EndsWith("/main/set3dSurround?enable=true", path),
+            path => Assert.EndsWith("/main/setDirect?enable=false", path),
+            path => Assert.EndsWith("/main/setPureDirect?enable=true", path),
+            path => Assert.EndsWith("/main/setEnhancer?enable=false", path),
+            path => Assert.EndsWith("/main/setToneControl?mode=manual&bass=1.5&treble=-0.5", path),
+            path => Assert.EndsWith("/main/setEqualizer?mode=manual&low=1&mid=0&high=-1", path),
+            path => Assert.EndsWith("/main/setBalance?value=-2", path));
     }
 
     [Fact]

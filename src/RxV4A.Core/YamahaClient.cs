@@ -17,6 +17,26 @@ public interface IYamahaClient
 
     Task SetMainInputAsync(string inputId, CancellationToken cancellationToken);
 
+    Task SetMainVolumeAsync(decimal volume, CancellationToken cancellationToken);
+
+    Task SetMainMuteAsync(bool enabled, CancellationToken cancellationToken);
+
+    Task SetMainSoundProgramAsync(string programId, CancellationToken cancellationToken);
+
+    Task SetMainSurround3dAsync(bool enabled, CancellationToken cancellationToken);
+
+    Task SetMainDirectAsync(bool enabled, CancellationToken cancellationToken);
+
+    Task SetMainPureDirectAsync(bool enabled, CancellationToken cancellationToken);
+
+    Task SetMainEnhancerAsync(bool enabled, CancellationToken cancellationToken);
+
+    Task SetMainToneControlAsync(ToneControlSettings settings, CancellationToken cancellationToken);
+
+    Task SetMainEqualizerAsync(EqualizerSettings settings, CancellationToken cancellationToken);
+
+    Task SetMainBalanceAsync(decimal value, CancellationToken cancellationToken);
+
     Task RecallMainSceneAsync(int sceneNumber, CancellationToken cancellationToken);
 }
 
@@ -67,6 +87,64 @@ public sealed class YamahaClient : IYamahaClient
         await GetAsync<CommandResponse>($"main/setInput?input={value}", cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task SetMainVolumeAsync(decimal volume, CancellationToken cancellationToken) =>
+        await GetAsync<CommandResponse>(
+            $"main/setVolume?volume={FormatNumber(volume)}",
+            cancellationToken).ConfigureAwait(false);
+
+    public async Task SetMainMuteAsync(bool enabled, CancellationToken cancellationToken) =>
+        await SetMainBooleanAsync("setMute", enabled, cancellationToken).ConfigureAwait(false);
+
+    public async Task SetMainSoundProgramAsync(string programId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(programId))
+        {
+            throw new ArgumentException("A sound program id is required.", nameof(programId));
+        }
+
+        await GetAsync<CommandResponse>(
+            $"main/setSoundProgram?program={Uri.EscapeDataString(programId.Trim())}",
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task SetMainSurround3dAsync(bool enabled, CancellationToken cancellationToken) =>
+        await SetMainBooleanAsync("set3dSurround", enabled, cancellationToken).ConfigureAwait(false);
+
+    public async Task SetMainDirectAsync(bool enabled, CancellationToken cancellationToken) =>
+        await SetMainBooleanAsync("setDirect", enabled, cancellationToken).ConfigureAwait(false);
+
+    public async Task SetMainPureDirectAsync(bool enabled, CancellationToken cancellationToken) =>
+        await SetMainBooleanAsync("setPureDirect", enabled, cancellationToken).ConfigureAwait(false);
+
+    public async Task SetMainEnhancerAsync(bool enabled, CancellationToken cancellationToken) =>
+        await SetMainBooleanAsync("setEnhancer", enabled, cancellationToken).ConfigureAwait(false);
+
+    public async Task SetMainToneControlAsync(ToneControlSettings settings, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        var query = BuildOptionalSettingsQuery(
+            ("mode", settings.Mode),
+            ("bass", FormatOptionalNumber(settings.Bass)),
+            ("treble", FormatOptionalNumber(settings.Treble)));
+        await GetAsync<CommandResponse>($"main/setToneControl?{query}", cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task SetMainEqualizerAsync(EqualizerSettings settings, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        var query = BuildOptionalSettingsQuery(
+            ("mode", settings.Mode),
+            ("low", FormatOptionalNumber(settings.Low)),
+            ("mid", FormatOptionalNumber(settings.Mid)),
+            ("high", FormatOptionalNumber(settings.High)));
+        await GetAsync<CommandResponse>($"main/setEqualizer?{query}", cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task SetMainBalanceAsync(decimal value, CancellationToken cancellationToken) =>
+        await GetAsync<CommandResponse>(
+            $"main/setBalance?value={FormatNumber(value)}",
+            cancellationToken).ConfigureAwait(false);
+
     public async Task RecallMainSceneAsync(int sceneNumber, CancellationToken cancellationToken)
     {
         if (sceneNumber < 1)
@@ -101,6 +179,30 @@ public sealed class YamahaClient : IYamahaClient
         }
 
         return new UriBuilder(Uri.UriSchemeHttp, uri.Host, uri.IsDefaultPort ? 80 : uri.Port).Uri;
+    }
+
+    private async Task SetMainBooleanAsync(
+        string operation,
+        bool enabled,
+        CancellationToken cancellationToken) =>
+        await GetAsync<CommandResponse>(
+            $"main/{operation}?enable={enabled.ToString().ToLowerInvariant()}",
+            cancellationToken).ConfigureAwait(false);
+
+    private static string FormatNumber(decimal value) =>
+        value.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static string? FormatOptionalNumber(decimal? value) =>
+        value.HasValue ? FormatNumber(value.Value) : null;
+
+    private static string BuildOptionalSettingsQuery(params (string Name, string? Value)[] parameters)
+    {
+        var query = string.Join("&", parameters
+            .Where(parameter => !string.IsNullOrWhiteSpace(parameter.Value))
+            .Select(parameter => $"{parameter.Name}={Uri.EscapeDataString(parameter.Value!.Trim())}"));
+        return query.Length > 0
+            ? query
+            : throw new ArgumentException("At least one setting is required.", nameof(parameters));
     }
 
     private async Task<TResponse> GetAsync<TResponse>(string relativePath, CancellationToken cancellationToken)

@@ -18,6 +18,7 @@ public partial class MainWindow : Window
     private HwndSource? _windowSource;
     private bool _allowClose;
     private bool _pingConfirmationPromptActive;
+    private bool _updatingDailyControls;
     private string? _declinedPingConfirmationSignature;
 
     public MainWindow(
@@ -192,7 +193,7 @@ public partial class MainWindow : Window
         PowerText.Text = snapshot.MainZone?.Power ?? "—";
         PlaybackText.Text = snapshot.MainZone is null
             ? "—"
-            : $"{snapshot.MainZone.Input ?? "—"} / {FormatVolume(snapshot.MainZone.Volume)}";
+            : $"{snapshot.MainZone.Input ?? "—"} / {FormatVolume(snapshot.MainZone)}";
         UpdatedText.Text = snapshot.UpdatedAt == DateTimeOffset.MinValue
             ? "—"
             : snapshot.UpdatedAt.ToLocalTime().ToString("yyyy/MM/dd HH:mm:ss", CultureInfo.CurrentCulture);
@@ -201,8 +202,261 @@ public partial class MainWindow : Window
                          snapshot.Capabilities?.SupportsZoneFunction("main", "power") == true;
         PowerOnButton.IsEnabled = canOperate;
         StandbyButton.IsEnabled = canOperate;
+        UpdateDailyControls(snapshot);
         UpdateControlState();
         MaybePromptForBroadPingScan(snapshot);
+    }
+
+    private void UpdateDailyControls(DeviceSnapshot snapshot)
+    {
+        _updatingDailyControls = true;
+        try
+        {
+            var connected = snapshot.ConnectionState == DeviceConnectionState.Connected;
+            var capabilities = snapshot.Capabilities;
+            var zone = capabilities?.FindZone("main");
+            var status = snapshot.MainZone;
+
+            var inputs = zone?.Inputs
+                .Select(input => input.Id)
+                .Where(ApplicationScope.IsOperationalInput)
+                .ToArray() ?? [];
+            InputPanel.Visibility = inputs.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            InputComboBox.ItemsSource = inputs;
+            InputComboBox.SelectedItem = inputs.FirstOrDefault(input =>
+                string.Equals(input, status?.Input, StringComparison.OrdinalIgnoreCase));
+            InputComboBox.IsEnabled = connected;
+            SetInputButton.IsEnabled = connected;
+
+            var volumeRange = capabilities?.FindZoneRange("main", "volume");
+            var hasVolume = capabilities?.SupportsZoneFunction("main", "volume") == true &&
+                            volumeRange?.Minimum is decimal &&
+                            volumeRange.Maximum is decimal &&
+                            volumeRange.Step is > 0;
+            VolumePanel.Visibility = hasVolume ? Visibility.Visible : Visibility.Collapsed;
+            if (hasVolume)
+            {
+                VolumeSlider.Minimum = (double)volumeRange!.Minimum!.Value;
+                VolumeSlider.Maximum = (double)volumeRange.Maximum!.Value;
+                VolumeSlider.TickFrequency = (double)volumeRange.Step!.Value;
+                VolumeSlider.IsEnabled = connected;
+                SetVolumeButton.IsEnabled = connected;
+                if (status?.Volume is decimal volume)
+                {
+                    VolumeSlider.Value = Math.Clamp((double)volume, VolumeSlider.Minimum, VolumeSlider.Maximum);
+                }
+
+                VolumeValueText.Text = FormatValue((decimal)VolumeSlider.Value);
+                VolumeSlider.ToolTip = $"{volumeRange.Minimum} ～ {volumeRange.Maximum} / {volumeRange.Step}刻み";
+            }
+
+            SetBooleanControl(MutePanel, MuteCheckBox, capabilities, "mute", status?.Mute, connected);
+
+            var programs = zone?.SoundPrograms.ToArray() ?? [];
+            var hasPrograms = capabilities?.SupportsZoneFunction("main", "sound_program") == true &&
+                              programs.Length > 0;
+            SoundProgramPanel.Visibility = hasPrograms ? Visibility.Visible : Visibility.Collapsed;
+            SoundProgramComboBox.ItemsSource = programs;
+            SoundProgramComboBox.SelectedItem = programs.FirstOrDefault(program =>
+                string.Equals(program, status?.SoundProgram, StringComparison.OrdinalIgnoreCase));
+            SoundProgramComboBox.IsEnabled = connected;
+            SetSoundProgramButton.IsEnabled = connected;
+
+            SetBooleanControl(null, Surround3dCheckBox, capabilities, "surround_3d", status?.Surround3d, connected);
+            SetBooleanControl(null, DirectCheckBox, capabilities, "direct", status?.Direct, connected);
+            SetBooleanControl(null, PureDirectCheckBox, capabilities, "pure_direct", status?.PureDirect, connected);
+            SetBooleanControl(null, EnhancerCheckBox, capabilities, "enhancer", status?.Enhancer, connected);
+            ProcessingPanel.Visibility = ProcessingPanel.Children.OfType<System.Windows.Controls.CheckBox>()
+                .Any(control => control.Visibility == Visibility.Visible)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+            var hasTone = capabilities?.SupportsZoneFunction("main", "tone_control") == true;
+            TonePanel.Visibility = hasTone ? Visibility.Visible : Visibility.Collapsed;
+            TonePanel.IsEnabled = connected;
+            if (hasTone)
+            {
+                SetModes(ToneModeComboBox, zone!.ToneControlModes, status?.ToneControl?.Mode);
+                BassTextBox.Text = FormatValue(status?.ToneControl?.Bass);
+                TrebleTextBox.Text = FormatValue(status?.ToneControl?.Treble);
+                SetRangeToolTip(BassTextBox, capabilities!.FindZoneRange("main", "tone_control"));
+                SetRangeToolTip(TrebleTextBox, capabilities.FindZoneRange("main", "tone_control"));
+            }
+
+            var hasEqualizer = capabilities?.SupportsZoneFunction("main", "equalizer") == true;
+            EqualizerPanel.Visibility = hasEqualizer ? Visibility.Visible : Visibility.Collapsed;
+            EqualizerPanel.IsEnabled = connected;
+            if (hasEqualizer)
+            {
+                SetModes(EqualizerModeComboBox, zone!.EqualizerModes, status?.Equalizer?.Mode);
+                EqualizerLowTextBox.Text = FormatValue(status?.Equalizer?.Low);
+                EqualizerMidTextBox.Text = FormatValue(status?.Equalizer?.Mid);
+                EqualizerHighTextBox.Text = FormatValue(status?.Equalizer?.High);
+                var range = capabilities!.FindZoneRange("main", "equalizer");
+                SetRangeToolTip(EqualizerLowTextBox, range);
+                SetRangeToolTip(EqualizerMidTextBox, range);
+                SetRangeToolTip(EqualizerHighTextBox, range);
+            }
+
+            var balanceRange = capabilities?.FindZoneRange("main", "balance");
+            var hasBalance = capabilities?.SupportsZoneFunction("main", "balance") == true &&
+                             balanceRange is not null;
+            BalancePanel.Visibility = hasBalance ? Visibility.Visible : Visibility.Collapsed;
+            BalancePanel.IsEnabled = connected;
+            if (hasBalance)
+            {
+                BalanceTextBox.Text = FormatValue(status?.Balance);
+                SetRangeToolTip(BalanceTextBox, balanceRange);
+            }
+
+            CapabilityNoteText.Text = capabilities is null
+                ? "接続後、機器が公式APIで広告した操作だけを表示します。"
+                : string.Equals(capabilities.DeviceInfo.ModelName, "RX-V4A", StringComparison.OrdinalIgnoreCase)
+                    ? "RX-V4A実機確認対象。広告されない機能は表示しません。"
+                    : "公式APIとの互換動作です。この機種での実機確認は行っていません。";
+        }
+        finally
+        {
+            _updatingDailyControls = false;
+        }
+    }
+
+    private static void SetBooleanControl(
+        FrameworkElement? panel,
+        System.Windows.Controls.CheckBox control,
+        CapabilitySnapshot? capabilities,
+        string capability,
+        bool? value,
+        bool connected)
+    {
+        var supported = capabilities?.SupportsZoneFunction("main", capability) == true;
+        (panel ?? control).Visibility = supported ? Visibility.Visible : Visibility.Collapsed;
+        control.IsEnabled = connected;
+        control.IsChecked = value;
+    }
+
+    private static void SetModes(
+        System.Windows.Controls.ComboBox comboBox,
+        IReadOnlyList<string> advertisedModes,
+        string? currentMode)
+    {
+        var modes = advertisedModes.Count > 0 ? advertisedModes : ["manual"];
+        comboBox.ItemsSource = modes;
+        comboBox.SelectedItem = modes.FirstOrDefault(mode =>
+            string.Equals(mode, currentMode, StringComparison.OrdinalIgnoreCase)) ?? modes[0];
+    }
+
+    private static void SetRangeToolTip(FrameworkElement control, RangeStepFeature? range) =>
+        control.ToolTip = range?.Minimum is decimal minimum &&
+                          range.Maximum is decimal maximum &&
+                          range.Step is decimal step
+            ? $"{minimum} ～ {maximum} / {step}刻み"
+            : "機器から値域を取得できません";
+
+    private async void SetInputButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (InputComboBox.SelectedItem is string input)
+        {
+            await RunUiOperationAsync(() => _deviceManager.SetMainInputAsync(input));
+        }
+    }
+
+    private async void SetVolumeButton_Click(object sender, RoutedEventArgs e) =>
+        await RunUiOperationAsync(() => _deviceManager.SetMainVolumeAsync(GetSnappedVolume()));
+
+    private void VolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (VolumeValueText is not null)
+        {
+            VolumeValueText.Text = FormatValue((decimal)e.NewValue);
+        }
+    }
+
+    private async void MuteCheckBox_Click(object sender, RoutedEventArgs e) =>
+        await RunBooleanOperationAsync(value => _deviceManager.SetMainMuteAsync(value), MuteCheckBox);
+
+    private async void SetSoundProgramButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (SoundProgramComboBox.SelectedItem is string program)
+        {
+            await RunUiOperationAsync(() => _deviceManager.SetMainSoundProgramAsync(program));
+        }
+    }
+
+    private async void Surround3dCheckBox_Click(object sender, RoutedEventArgs e) =>
+        await RunBooleanOperationAsync(value => _deviceManager.SetMainSurround3dAsync(value), Surround3dCheckBox);
+
+    private async void DirectCheckBox_Click(object sender, RoutedEventArgs e) =>
+        await RunBooleanOperationAsync(value => _deviceManager.SetMainDirectAsync(value), DirectCheckBox);
+
+    private async void PureDirectCheckBox_Click(object sender, RoutedEventArgs e) =>
+        await RunBooleanOperationAsync(value => _deviceManager.SetMainPureDirectAsync(value), PureDirectCheckBox);
+
+    private async void EnhancerCheckBox_Click(object sender, RoutedEventArgs e) =>
+        await RunBooleanOperationAsync(value => _deviceManager.SetMainEnhancerAsync(value), EnhancerCheckBox);
+
+    private async Task RunBooleanOperationAsync(
+        Func<bool, Task<DeviceSnapshot>> operation,
+        System.Windows.Controls.CheckBox control)
+    {
+        if (_updatingDailyControls)
+        {
+            return;
+        }
+
+        await RunUiOperationAsync(() => operation(control.IsChecked == true));
+        UpdateDailyControls(_deviceManager.Snapshot);
+    }
+
+    private async void SetToneButton_Click(object sender, RoutedEventArgs e) =>
+        await RunUiOperationAsync(() => _deviceManager.SetMainToneControlAsync(new ToneControlSettings(
+            ToneModeComboBox.SelectedItem as string,
+            ParseOptionalDecimal(BassTextBox.Text),
+            ParseOptionalDecimal(TrebleTextBox.Text))));
+
+    private async void SetEqualizerButton_Click(object sender, RoutedEventArgs e) =>
+        await RunUiOperationAsync(() => _deviceManager.SetMainEqualizerAsync(new EqualizerSettings(
+            EqualizerModeComboBox.SelectedItem as string,
+            ParseOptionalDecimal(EqualizerLowTextBox.Text),
+            ParseOptionalDecimal(EqualizerMidTextBox.Text),
+            ParseOptionalDecimal(EqualizerHighTextBox.Text))));
+
+    private async void SetBalanceButton_Click(object sender, RoutedEventArgs e) =>
+        await RunUiOperationAsync(() => _deviceManager.SetMainBalanceAsync(
+            ParseOptionalDecimal(BalanceTextBox.Text) ??
+            throw new ArgumentException("バランス値を入力してください。")));
+
+    private static decimal? ParseOptionalDecimal(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        if (decimal.TryParse(text, NumberStyles.Number, CultureInfo.CurrentCulture, out var current) ||
+            decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out current))
+        {
+            return current;
+        }
+
+        throw new ArgumentException("数値を入力してください。");
+    }
+
+    private static string FormatValue(decimal? value) =>
+        value?.ToString("0.###", CultureInfo.CurrentCulture) ?? string.Empty;
+
+    private decimal GetSnappedVolume()
+    {
+        var range = _deviceManager.Snapshot.Capabilities?.FindZoneRange("main", "volume")
+            ?? throw new CapabilityNotSupportedException("main.volume.range");
+        if (range.Minimum is not decimal minimum || range.Step is not decimal step || step <= 0)
+        {
+            throw new CapabilityNotSupportedException("main.volume.range");
+        }
+
+        var raw = (decimal)VolumeSlider.Value;
+        var steps = decimal.Round((raw - minimum) / step, 0, MidpointRounding.AwayFromZero);
+        return minimum + steps * step;
     }
 
     private async void MaybePromptForBroadPingScan(DeviceSnapshot snapshot)
@@ -226,7 +480,7 @@ public partial class MainWindow : Window
         try
         {
             var response = System.Windows.MessageBox.Show(
-                $"SSDPとプレフィックス/24以上の自動ping探索ではRX-V4Aを検出できませんでした。\n\n" +
+                $"SSDPとプレフィックス/24以上の自動ping探索では対応アンプを検出できませんでした。\n\n" +
                 $"プレフィックス /{confirmation.BroadestPrefixLength} を含む広いサブネットへ、最大 {confirmation.HostCount:N0} ホストのping探索を実行しますか？\n\n" +
                 "応答ホストには読み取り専用のgetDeviceInfoを送信します。アンプ設定は変更しません。",
                 "広いサブネットのping探索",
@@ -368,7 +622,7 @@ public partial class MainWindow : Window
             System.Windows.MessageBox.Show(
                 exception switch
                 {
-                    DeviceUnavailableException => "RX-V4Aに接続されていません。",
+                    DeviceUnavailableException => "対応アンプに接続されていません。",
                     CapabilityNotSupportedException => "実機のCapabilityにこの操作がありません。",
                     OperationCanceledException => "操作がタイムアウトしました。",
                     ArgumentException => "接続先はIPアドレスまたはホスト名だけを指定してください。",
@@ -380,8 +634,17 @@ public partial class MainWindow : Window
         }
     }
 
-    private static string FormatVolume(decimal? volume) =>
-        volume.HasValue ? $"{volume.Value:0.0} dB" : "—";
+    private static string FormatVolume(MainZoneStatusResponse status)
+    {
+        if (status.ActualVolume?.Value is decimal actual)
+        {
+            return string.IsNullOrWhiteSpace(status.ActualVolume.Unit)
+                ? actual.ToString("0.###", CultureInfo.CurrentCulture)
+                : $"{actual.ToString("0.###", CultureInfo.CurrentCulture)} {status.ActualVolume.Unit}";
+        }
+
+        return status.Volume?.ToString("0.###", CultureInfo.CurrentCulture) ?? "—";
+    }
 
     private sealed record DiscoveryInterfaceOption(string Label, string? Id);
 }

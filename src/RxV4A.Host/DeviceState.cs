@@ -46,6 +46,30 @@ public interface IDeviceManager
 
     Task<DeviceSnapshot> SetMainInputAsync(string inputId, CancellationToken cancellationToken = default);
 
+    Task<DeviceSnapshot> SetMainVolumeAsync(decimal volume, CancellationToken cancellationToken = default);
+
+    Task<DeviceSnapshot> SetMainMuteAsync(bool enabled, CancellationToken cancellationToken = default);
+
+    Task<DeviceSnapshot> SetMainSoundProgramAsync(string programId, CancellationToken cancellationToken = default);
+
+    Task<DeviceSnapshot> SetMainSurround3dAsync(bool enabled, CancellationToken cancellationToken = default);
+
+    Task<DeviceSnapshot> SetMainDirectAsync(bool enabled, CancellationToken cancellationToken = default);
+
+    Task<DeviceSnapshot> SetMainPureDirectAsync(bool enabled, CancellationToken cancellationToken = default);
+
+    Task<DeviceSnapshot> SetMainEnhancerAsync(bool enabled, CancellationToken cancellationToken = default);
+
+    Task<DeviceSnapshot> SetMainToneControlAsync(
+        ToneControlSettings settings,
+        CancellationToken cancellationToken = default);
+
+    Task<DeviceSnapshot> SetMainEqualizerAsync(
+        EqualizerSettings settings,
+        CancellationToken cancellationToken = default);
+
+    Task<DeviceSnapshot> SetMainBalanceAsync(decimal value, CancellationToken cancellationToken = default);
+
     Task<DeviceSnapshot> RecallMainSceneAsync(int sceneNumber, CancellationToken cancellationToken = default);
 
     Task UpdateManualHostAsync(string? host, CancellationToken cancellationToken = default);

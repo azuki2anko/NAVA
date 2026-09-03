@@ -25,6 +25,9 @@ public sealed record DeviceInfoResponse : YamahaResponse
     [JsonConverter(typeof(FlexibleStringJsonConverter))]
     public string? SystemVersion { get; init; }
 
+    [JsonPropertyName("category_code")]
+    public int? CategoryCode { get; init; }
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? AdditionalData { get; init; }
 }
@@ -84,6 +87,15 @@ public sealed record ZoneFeatures
 
     [JsonPropertyName("sound_program_list")]
     public IReadOnlyList<string> SoundPrograms { get; init; } = [];
+
+    [JsonPropertyName("surr_decoder_type_list")]
+    public IReadOnlyList<string> SurroundDecoderTypes { get; init; } = [];
+
+    [JsonPropertyName("tone_control_mode_list")]
+    public IReadOnlyList<string> ToneControlModes { get; init; } = [];
+
+    [JsonPropertyName("equalizer_mode_list")]
+    public IReadOnlyList<string> EqualizerModes { get; init; } = [];
 
     [JsonPropertyName("range_step")]
     public IReadOnlyList<RangeStepFeature> Ranges { get; init; } = [];
@@ -218,12 +230,79 @@ public sealed record MainZoneStatusResponse : YamahaResponse
     [JsonPropertyName("surr_decoder_type")]
     public string? SurroundDecoderType { get; init; }
 
+    [JsonPropertyName("surround_3d")]
+    public bool? Surround3d { get; init; }
+
+    [JsonPropertyName("direct")]
+    public bool? Direct { get; init; }
+
+    [JsonPropertyName("pure_direct")]
+    public bool? PureDirect { get; init; }
+
+    [JsonPropertyName("enhancer")]
+    public bool? Enhancer { get; init; }
+
+    [JsonPropertyName("tone_control")]
+    public ToneControlStatus? ToneControl { get; init; }
+
+    [JsonPropertyName("equalizer")]
+    public EqualizerStatus? Equalizer { get; init; }
+
+    [JsonPropertyName("balance")]
+    public decimal? Balance { get; init; }
+
+    [JsonPropertyName("actual_volume")]
+    public ActualVolumeStatus? ActualVolume { get; init; }
+
     [JsonPropertyName("headphone")]
     public bool? Headphone { get; init; }
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? AdditionalData { get; init; }
 }
+
+public sealed record ToneControlStatus
+{
+    [JsonPropertyName("mode")]
+    public string? Mode { get; init; }
+
+    [JsonPropertyName("bass")]
+    public decimal? Bass { get; init; }
+
+    [JsonPropertyName("treble")]
+    public decimal? Treble { get; init; }
+}
+
+public sealed record EqualizerStatus
+{
+    [JsonPropertyName("mode")]
+    public string? Mode { get; init; }
+
+    [JsonPropertyName("low")]
+    public decimal? Low { get; init; }
+
+    [JsonPropertyName("mid")]
+    public decimal? Mid { get; init; }
+
+    [JsonPropertyName("high")]
+    public decimal? High { get; init; }
+}
+
+public sealed record ActualVolumeStatus
+{
+    [JsonPropertyName("mode")]
+    public string? Mode { get; init; }
+
+    [JsonPropertyName("value")]
+    public decimal? Value { get; init; }
+
+    [JsonPropertyName("unit")]
+    public string? Unit { get; init; }
+}
+
+public sealed record ToneControlSettings(string? Mode, decimal? Bass, decimal? Treble);
+
+public sealed record EqualizerSettings(string? Mode, decimal? Low, decimal? Mid, decimal? High);
 
 public sealed record CommandResponse : YamahaResponse;
 

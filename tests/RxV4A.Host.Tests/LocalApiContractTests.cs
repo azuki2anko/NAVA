@@ -40,6 +40,9 @@ public sealed class LocalApiContractTests
 
         var openApi = await httpClient.GetStringAsync("/openapi/v1.json", CancellationToken.None);
         Assert.Contains("/api/v1/zones/main/power", openApi, StringComparison.Ordinal);
+        Assert.Contains("/api/v1/zones/main/volume", openApi, StringComparison.Ordinal);
+        Assert.Contains("/api/v1/zones/main/processing/pure-direct", openApi, StringComparison.Ordinal);
+        Assert.Contains("/api/v1/zones/main/equalizer", openApi, StringComparison.Ordinal);
         Assert.Contains("/api/v1/contexts/{contextId}:activate", openApi, StringComparison.Ordinal);
         Assert.Contains("/api/v1/actions/{actionId}:execute", openApi, StringComparison.Ordinal);
 
@@ -49,6 +52,13 @@ public sealed class LocalApiContractTests
             CancellationToken.None);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(MainPower.On, manager.LastPower);
+
+        var volumeResponse = await httpClient.PutAsJsonAsync(
+            "/api/v1/zones/main/volume",
+            new { volume = -35.5m },
+            CancellationToken.None);
+        Assert.Equal(HttpStatusCode.OK, volumeResponse.StatusCode);
+        Assert.Equal(-35.5m, manager.LastVolume);
 
         var contextResponse = await httpClient.PostAsync(
             "/api/v1/contexts/example-blocker:activate",
@@ -100,6 +110,8 @@ public sealed class LocalApiContractTests
 
         public MainPower? LastPower { get; private set; }
 
+        public decimal? LastVolume { get; private set; }
+
         public DeviceSnapshot Snapshot => new(
             DeviceConnectionState.Connected,
             _capabilities,
@@ -124,6 +136,42 @@ public sealed class LocalApiContractTests
         public Task<DeviceSnapshot> SetMainInputAsync(
             string inputId,
             CancellationToken cancellationToken = default) => Task.FromResult(Snapshot);
+
+        public Task<DeviceSnapshot> SetMainVolumeAsync(decimal volume, CancellationToken cancellationToken = default)
+        {
+            LastVolume = volume;
+            return Task.FromResult(Snapshot);
+        }
+
+        public Task<DeviceSnapshot> SetMainMuteAsync(bool enabled, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Snapshot);
+
+        public Task<DeviceSnapshot> SetMainSoundProgramAsync(
+            string programId,
+            CancellationToken cancellationToken = default) => Task.FromResult(Snapshot);
+
+        public Task<DeviceSnapshot> SetMainSurround3dAsync(bool enabled, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Snapshot);
+
+        public Task<DeviceSnapshot> SetMainDirectAsync(bool enabled, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Snapshot);
+
+        public Task<DeviceSnapshot> SetMainPureDirectAsync(bool enabled, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Snapshot);
+
+        public Task<DeviceSnapshot> SetMainEnhancerAsync(bool enabled, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Snapshot);
+
+        public Task<DeviceSnapshot> SetMainToneControlAsync(
+            ToneControlSettings settings,
+            CancellationToken cancellationToken = default) => Task.FromResult(Snapshot);
+
+        public Task<DeviceSnapshot> SetMainEqualizerAsync(
+            EqualizerSettings settings,
+            CancellationToken cancellationToken = default) => Task.FromResult(Snapshot);
+
+        public Task<DeviceSnapshot> SetMainBalanceAsync(decimal value, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Snapshot);
 
         public Task<DeviceSnapshot> RecallMainSceneAsync(
             int sceneNumber,

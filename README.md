@@ -1,15 +1,18 @@
 # RX-V4A Manager
 
-Windows 11 x64 / .NET 10 LTS / WPFで動作する、Yamaha RX-V4A向けタスクトレイ常駐アプリです。正式な要件基準は [`doc/public/01_REQUIREMENTS_PUBLIC.md`](doc/public/01_REQUIREMENTS_PUBLIC.md) です。
+Windows 11 x64 / .NET 10 LTS / WPFで動作する、Yamaha Extended Control対応アンプ向けタスクトレイ常駐アプリです。正式な要件基準は [`doc/public/01_REQUIREMENTS_PUBLIC.md`](doc/public/01_REQUIREMENTS_PUBLIC.md) です。
 
 本プロジェクトは非公式のコミュニティプロジェクトであり、ヤマハ株式会社による提供・保証・承認を受けたものではありません。
+
+実装はYamaha Extended Control API Specification (Basic / Advanced) Rev.2.00に基づきます。実機で動作確認している機種はRX-V4Aだけです。ほかの機種は`getFeatures`が広告する機能と値域に従って互換動作を試みますが、実機動作は保証しません。
 
 ## 現在の実装範囲
 
 - 複数IPv4インターフェースからのSSDP探索、Windows近隣キャッシュ、確認付きping探索、手動ホスト指定
 - `getDeviceInfo`、`getFeatures`、`getAdvancedFeatures`、Main Zone `getStatus`
 - `getFeatures`を単一情報源にしたMain Zone ON / Standby
-- 接続状態・電源・入力・音量を表示する最小WPF画面
+- 入力、音量、ミュート、音場プログラム、3D Surround、Direct、Pure Direct、Enhancer、トーン、EQ、バランスのCapability駆動操作
+- 接続状態とPC用アンプの日常操作をまとめたWPF画面
 - 状態確認・更新・電源操作を行うタスクトレイメニュー
 - 最前面・リサイズ対応のミニ電源トグルと位置保存
 - `http://127.0.0.1:55274/api/v1` の型付きREST API
@@ -45,6 +48,8 @@ Content-Type: application/json
 
 { "power": "on" }
 ```
+
+入力、音量、ミュート、音声処理も`/api/v1/zones/main`以下の型付きエンドポイントとして提供します。指定値は入力一覧、音場一覧、`range_step`に対して検証されます。Tuner／ラジオ機能は現時点では保留です。
 
 実機で最初に状態を変更する前に、対象操作を明示して確認を得てください。
 
