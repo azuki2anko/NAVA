@@ -1,64 +1,83 @@
 # RX-V4A Manager
 
-Windows 11 x64 / .NET 10 LTS / WPFで動作する、Yamaha Extended Control対応アンプ向けタスクトレイ常駐アプリです。正式な要件基準は [`doc/public/01_REQUIREMENTS_PUBLIC.md`](doc/public/01_REQUIREMENTS_PUBLIC.md) です。
+Windows 11からYamaha Extended Control対応アンプを操作する、Capability駆動のタスクトレイ常駐アプリです。リモコンの完全再現ではなく、PC用アンプとして使うMain Zoneの日常操作へ重点を置いています。
 
-本プロジェクトは非公式のコミュニティプロジェクトであり、ヤマハ株式会社による提供・保証・承認を受けたものではありません。
+> [!IMPORTANT]
+> 実機で動作確認している機種はRX-V4Aだけです。ほかの機種はYamaha Extended Control API Specification (Basic / Advanced) Rev.2.00と`getFeatures`に基づく互換動作であり、動作保証はありません。
 
-実装はYamaha Extended Control API Specification (Basic / Advanced) Rev.2.00に基づきます。実機で動作確認している機種はRX-V4Aだけです。ほかの機種は`getFeatures`が広告する機能と値域に従って互換動作を試みますが、実機動作は保証しません。
+本プロジェクトは非公式のコミュニティプロジェクトであり、ヤマハ株式会社による提供、承認、保証はありません。
 
-## 現在の実装範囲
+## 主な機能
 
-- 複数IPv4インターフェースからのSSDP探索、Windows近隣キャッシュ、確認付きping探索、手動ホスト指定
-- `getDeviceInfo`、`getFeatures`、`getAdvancedFeatures`、Main Zone `getStatus`
-- `getFeatures`を単一情報源にしたMain Zone ON / Standby
-- 入力、音量、ミュート、音場プログラム、3D Surround、Direct、Pure Direct、Enhancer、トーン、EQ、バランスのCapability駆動操作
-- 接続状態とPC用アンプの日常操作をまとめたWPF画面
-- 状態確認・更新・電源操作を行うタスクトレイメニュー
-- 最前面・リサイズ対応のミニ電源トグルと位置保存
-- `http://127.0.0.1:55274/api/v1` の型付きREST API
-- `http://127.0.0.1:55274/openapi/v1.json` のOpenAPI文書
-- 構成可能な汎用アクティビティと複数Power-on blocker
-- `IRegisteredAction`による、事前登録アクションだけを実行できる拡張契約
-- `RegisterHotKey`と`MOD_NOREPEAT`によるCtrl／Alt／Shift + F13～F24
-- Ctrl+Alt+F13=ON、Ctrl+Alt+F14=Standby。F15～F24は未割り当て
-- JSON設定、日次JSON Linesログ、タイムアウト、低頻度ポーリング、自動再接続
-- HTTPモック単体テストとループバックAPI契約テスト
+- 電源ON／Standby、映像・音声入力、音量、ミュート
+- 音場プログラム、3D Surround、Direct、Pure Direct、Enhancer
+- トーン、EQ、左右バランス
+- SSDP、Windows近隣キャッシュ、確認付きping探索、手動接続
+- シンプルなWPF画面、タスクトレイ、最前面ミニ電源トグル
+- Ctrl／Alt／Shift + F13～F24のグローバルホットキー
+- `127.0.0.1`限定の型付きREST APIとOpenAPI
+- 汎用アクティビティ、Power-on blocker、登録済みアクション拡張契約
+- JSON設定、構造化ログ、タイムアウト、ポーリング、自動再接続
 
-公開版は個人用プロファイル、外部アプリ固有アダプター、個人用例外を登録しません。アクティビティ、blocker、登録済みアクションは設定または公開契約を通じて追加し、外部入力から任意URL、任意コマンド、任意キー列、任意Yamaha APIを実行する機能は提供しません。
+機能、入力、音場、値域は`getFeatures`から取得します。機器が広告しない操作は画面へ表示せず、API要求も拒否します。Tuner／ラジオ機能は現在保留中です。
 
-## ビルドとテスト
+## 必要な環境
+
+- Windows 11 x64
+- PCとアンプが同じLANに接続されていること
+- ネットワーク制御に対応したYamahaアンプ
+
+通常利用で外部インターネット通信やテレメトリは必要ありません。
+
+## 使い始める
+
+GitHub Releasesの`win-x64`配布ZIPを展開し、`RXV4A.Manager.exe`を起動します。アプリはタスクトレイへ常駐し、読み取り専用の機器探索を開始します。詳しい初回接続、画面操作、ミニ画面、ホットキー、トラブル対処は[利用説明書](doc/USER_GUIDE.md)を参照してください。
+
+ソースから起動する場合:
 
 ```powershell
-dotnet build RxV4A.Manager.sln -c Release
-dotnet test RxV4A.Manager.sln -c Release
-dotnet format RxV4A.Manager.sln --verify-no-changes
-```
-
-起動すると、保存済みの手動接続先がなければ読み取り専用の探索を開始します。
-
-```powershell
+dotnet restore RxV4A.Manager.sln
 dotnet run --project src/RxV4A.Desktop/RxV4A.Desktop.csproj -c Debug
 ```
 
-GUI、トレイ、REST APIの電源操作は、接続済みかつCapabilityで許可された場合だけ有効です。REST APIは状態反転ではなく、`on`または`standby`を明示します。
+## localhost API
 
-```http
-PUT /api/v1/zones/main/power
-Content-Type: application/json
+- API: `http://127.0.0.1:55274/api/v1`
+- OpenAPI: `http://127.0.0.1:55274/openapi/v1.json`
 
-{ "power": "on" }
+APIは状態と目的を限定した型付き操作だけを提供します。任意のYamaha APIを転送するプロキシではありません。要求例は[localhost APIガイド](doc/API_GUIDE.md)を参照してください。
+
+## 文書
+
+- [利用説明書](doc/USER_GUIDE.md)
+- [localhost APIガイド](doc/API_GUIDE.md)
+- [公開版要件定義](doc/public/01_REQUIREMENTS_PUBLIC.md)
+- [実装ガイド](doc/03_IMPLEMENTATION_GUIDE.md)
+- [GitHub公開・リリースチェックリスト](doc/RELEASE_CHECKLIST.md)
+- [変更履歴](CHANGELOG.md)
+- [コントリビューションガイド](CONTRIBUTING.md)
+- [セキュリティポリシー](SECURITY.md)
+
+## ビルドと検証
+
+```powershell
+dotnet restore RxV4A.Manager.sln
+dotnet build RxV4A.Manager.sln -c Release --no-restore
+dotnet test RxV4A.Manager.sln -c Release --no-build --no-restore
+dotnet format RxV4A.Manager.sln --verify-no-changes --no-restore
+dotnet publish src/RxV4A.Desktop/RxV4A.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o artifacts/publish
 ```
 
-入力、音量、ミュート、音声処理も`/api/v1/zones/main`以下の型付きエンドポイントとして提供します。指定値は入力一覧、音場一覧、`range_step`に対して検証されます。Tuner／ラジオ機能は現時点では保留です。
+GitHub Actionsでも同じRelease build、test、format、self-contained publishを検証します。
 
-実機で最初に状態を変更する前に、対象操作を明示して確認を得てください。
+## プライバシーと安全性
 
-## プライバシーと公開境界
+実行時設定とログは`%LocalAppData%\RXV4A Manager`へ保存します。設定ファイルや無加工ログをIssueへ添付しないでください。IPアドレス、MACアドレス、機器ID、トークン、鍵、個人パスを公開しないでください。
 
-実行時設定と構造化ログはリポジトリ外の`%LocalAppData%\RXV4A Manager`に保存されます。Issueや共有ログへ設定ファイル、機器ID、MACアドレス、トークンを添付しないでください。
-
-`.private/`、`private/`、`src/RxV4A.Private*`、`tests/RxV4A.Private*`は公開ソリューションから参照しません。公開・非公開開発の運用は [`doc/PUBLIC_PRIVATE_DEVELOPMENT.md`](doc/PUBLIC_PRIVATE_DEVELOPMENT.md)、現在の分離判断は [`doc/public/CODE_SEPARATION_PLAN.md`](doc/public/CODE_SEPARATION_PLAN.md) を参照してください。
+公開版は外部入力から任意URL、任意コマンド、任意キー列、任意Yamaha APIを実行しません。実機の最初の確認は読み取り専用から始めてください。詳細は[セキュリティポリシー](SECURITY.md)を参照してください。
 
 ## ライセンス
 
-Copyright (c) 2026 anko。MIT Licenseで公開します。詳細は[`LICENSE`](LICENSE)を参照してください。
+Copyright (c) 2026 anko
+
+[MIT License](LICENSE)

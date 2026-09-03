@@ -12,6 +12,9 @@
 
 ## 参考文書
 
+- [`USER_GUIDE.md`](USER_GUIDE.md) — インストール、接続、日常操作、トラブル対処
+- [`API_GUIDE.md`](API_GUIDE.md) — localhost REST APIのパスと利用例
+- [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) — GitHub公開とRelease作成の確認手順
 - [`02_DEVICE_CAPABILITY_SNAPSHOT.md`](02_DEVICE_CAPABILITY_SNAPSHOT.md) — 実機識別情報を除去したCapability情報
 - [`03_IMPLEMENTATION_GUIDE.md`](03_IMPLEMENTATION_GUIDE.md) — 公開版の実装構造と安全境界
 - [`PUBLIC_PRIVATE_DEVELOPMENT.md`](PUBLIC_PRIVATE_DEVELOPMENT.md) — 2リポジトリでの開発・公開運用
@@ -23,4 +26,5 @@
 - 公開ソースから個人固有の既定プロファイル／外部アプリ固有コードを除去: 第1マイルストーン完了
 - 公開ソリューションのprivate非依存化: 完了
 - ローカルGit初期化／初回コミット: 完了
-- GitHub公開: 未実施
+- GitHub公開用の説明書／CI／テンプレート: 準備済み
+- GitHubリポジトリ作成／push: 未実施

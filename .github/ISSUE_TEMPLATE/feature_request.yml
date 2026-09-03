@@ -1,0 +1,35 @@
+name: 機能提案
+description: 公開版へ追加する汎用機能を提案します
+title: "[Feature] "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        公開Yamaha APIと`getFeatures`で表現できる、個人環境に依存しない提案を歓迎します。
+  - type: textarea
+    id: use-case
+    attributes:
+      label: 利用場面
+      description: どのような問題を解決したいか記載してください。
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 提案内容
+    validations:
+      required: true
+  - type: input
+    id: documented-api
+    attributes:
+      label: 関連する公開Yamaha API（分かる場合）
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: 公開版の境界
+      options:
+        - label: 秘密情報や個人用接続先を含みません。
+          required: true
+        - label: 任意コマンド、任意URL、未文書化APIの実行を前提にしていません。
+          required: true

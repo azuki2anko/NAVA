@@ -1,0 +1,70 @@
+name: 不具合報告
+description: 再現可能な不具合を報告します
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        報告ありがとうございます。実IP、MACアドレス、機器ID、トークン、設定ファイル全体は投稿しないでください。
+  - type: input
+    id: app-version
+    attributes:
+      label: アプリのバージョン
+      placeholder: 例 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: windows-version
+    attributes:
+      label: Windowsのバージョン
+      placeholder: 例 Windows 11 24H2 x64
+    validations:
+      required: true
+  - type: input
+    id: receiver-model
+    attributes:
+      label: アンプのモデル名
+      description: 実機確認済みモデルはRX-V4Aだけです。
+    validations:
+      required: true
+  - type: input
+    id: api-version
+    attributes:
+      label: Yamaha APIバージョン
+      description: 画面に表示される値だけを記載してください。
+  - type: textarea
+    id: steps
+    attributes:
+      label: 再現手順
+      placeholder: |
+        1. …
+        2. …
+        3. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待した結果
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 実際の結果
+    validations:
+      required: true
+  - type: textarea
+    id: sanitized-log
+    attributes:
+      label: 秘匿情報を除去したログ（任意）
+      description: 接続先、識別子、MACアドレス、トークン、個人パスを削除してください。
+      render: text
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: 公開情報の確認
+      options:
+        - label: 実IP、MACアドレス、機器ID、トークン、個人パスを含めていません。
+          required: true
