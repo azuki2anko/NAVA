@@ -44,8 +44,6 @@ public partial class CompactPowerWindow : Window
         Show();
         WindowState = WindowState.Normal;
         Topmost = true;
-        Activate();
-        ConstrainToCurrentMonitorWorkArea();
     }
 
     public void AllowClose() => _allowClose = true;
@@ -73,7 +71,6 @@ public partial class CompactPowerWindow : Window
         if (e.ChangedButton == System.Windows.Input.MouseButton.Left)
         {
             DragMove();
-            ConstrainToCurrentMonitorWorkArea();
             await SavePlacementAsync();
         }
     }
@@ -196,11 +193,6 @@ public partial class CompactPowerWindow : Window
             ResetToDefaultPosition();
             await SavePlacementAsync();
         }
-        else
-        {
-            ConstrainToCurrentMonitorWorkArea();
-            await SavePlacementAsync();
-        }
     }
 
     private void Window_SourceInitialized(object? sender, EventArgs e)
@@ -208,6 +200,7 @@ public partial class CompactPowerWindow : Window
         var windowHandle = new WindowInteropHelper(this).Handle;
         _windowSource = HwndSource.FromHwnd(windowHandle);
         _windowSource?.AddHook(WindowMessageHook);
+        ConfigureNonActivatingOverlay(windowHandle);
         HideSystemBorder(windowHandle);
     }
 
@@ -236,41 +229,19 @@ public partial class CompactPowerWindow : Window
         ref bool handled)
     {
         const int wmNcHitTest = 0x0084;
-        const int wmSettingChange = 0x001A;
-        const int wmSizing = 0x0214;
-        const int wmMoving = 0x0216;
+        const int wmMouseActivate = 0x0021;
         const int wmExitSizeMove = 0x0232;
-        const int spiSetWorkArea = 0x002F;
-        if (message == wmSettingChange && wParam.ToInt32() == spiSetWorkArea)
+        const int mouseActivateNoActivate = 3;
+        if (message == wmMouseActivate)
         {
-            Dispatcher.BeginInvoke(async () =>
-            {
-                ConstrainToCurrentMonitorWorkArea();
-                await SavePlacementAsync();
-            });
-            return IntPtr.Zero;
+            handled = true;
+            return new IntPtr(mouseActivateNoActivate);
         }
 
         if (message == wmExitSizeMove)
         {
-            Dispatcher.BeginInvoke(async () =>
-            {
-                ConstrainToCurrentMonitorWorkArea();
-                await SavePlacementAsync();
-            });
+            Dispatcher.BeginInvoke(async () => await SavePlacementAsync());
             return IntPtr.Zero;
-        }
-
-        if (message == wmMoving && TryConstrainMovingRectangle(lParam))
-        {
-            handled = true;
-            return new IntPtr(1);
-        }
-
-        if (message == wmSizing && TryConstrainSizingRectangle(wParam.ToInt32(), lParam))
-        {
-            handled = true;
-            return new IntPtr(1);
         }
 
         if (message != wmNcHitTest || WindowState != WindowState.Normal)
@@ -300,13 +271,33 @@ public partial class CompactPowerWindow : Window
             (_, _, _, true) => 15,       // HTBOTTOM
             _ => 0
         };
-        if (hit == 0)
+        if (hit != 0)
+        {
+            handled = true;
+            return new IntPtr(hit);
+        }
+
+        if (IsPointWithin(PowerToggleButton, point) || IsPointWithin(DragGrip, point))
         {
             return IntPtr.Zero;
         }
 
+        const int hitTransparent = -1;
         handled = true;
-        return new IntPtr(hit);
+        return new IntPtr(hitTransparent);
+    }
+
+    private bool IsPointWithin(FrameworkElement element, System.Windows.Point windowPoint)
+    {
+        if (!element.IsVisible || element.ActualWidth <= 0 || element.ActualHeight <= 0)
+        {
+            return false;
+        }
+
+        var topLeft = element.TranslatePoint(new System.Windows.Point(0, 0), this);
+        return new Rect(
+            topLeft,
+            new System.Windows.Size(element.ActualWidth, element.ActualHeight)).Contains(windowPoint);
     }
 
     private void SystemEvents_DisplaySettingsChanged(object? sender, EventArgs e) =>
@@ -336,129 +327,14 @@ public partial class CompactPowerWindow : Window
         var workArea = SystemParameters.WorkArea;
         Left = workArea.Right - ActualWidth - 10;
         Top = workArea.Top + 10;
-        ConstrainToCurrentMonitorWorkArea();
     }
 
-    private void ConstrainToCurrentMonitorWorkArea()
+    private static void ConfigureNonActivatingOverlay(IntPtr windowHandle)
     {
-        var workArea = GetCurrentMonitorWorkArea();
-        if (workArea is null)
-        {
-            return;
-        }
-
-        const double margin = 4;
-        var width = ActualWidth > 0 ? ActualWidth : Width;
-        var height = ActualHeight > 0 ? ActualHeight : Height;
-        var minimumLeft = workArea.Value.Left + margin;
-        var minimumTop = workArea.Value.Top + margin;
-        var maximumLeft = Math.Max(minimumLeft, workArea.Value.Right - width - margin);
-        var maximumTop = Math.Max(minimumTop, workArea.Value.Bottom - height - margin);
-        Left = Math.Clamp(Left, minimumLeft, maximumLeft);
-        Top = Math.Clamp(Top, minimumTop, maximumTop);
-    }
-
-    private Rect? GetCurrentMonitorWorkArea()
-    {
-        var windowHandle = new WindowInteropHelper(this).Handle;
-        if (windowHandle == IntPtr.Zero)
-        {
-            return null;
-        }
-
-        var monitor = MonitorFromWindow(windowHandle, monitorDefaultToNearest);
-        var monitorInfo = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
-        if (monitor == IntPtr.Zero || !GetMonitorInfo(monitor, ref monitorInfo))
-        {
-            return null;
-        }
-
-        var source = HwndSource.FromHwnd(windowHandle);
-        var transform = source?.CompositionTarget?.TransformFromDevice;
-        if (transform is null)
-        {
-            return null;
-        }
-
-        var topLeft = transform.Value.Transform(
-            new System.Windows.Point(monitorInfo.WorkArea.Left, monitorInfo.WorkArea.Top));
-        var bottomRight = transform.Value.Transform(
-            new System.Windows.Point(monitorInfo.WorkArea.Right, monitorInfo.WorkArea.Bottom));
-        return new Rect(topLeft, bottomRight);
-    }
-
-    private static bool TryConstrainMovingRectangle(IntPtr rectanglePointer)
-    {
-        if (rectanglePointer == IntPtr.Zero)
-        {
-            return false;
-        }
-
-        var rectangle = Marshal.PtrToStructure<NativeRectangle>(rectanglePointer);
-        var monitor = MonitorFromRect(ref rectangle, monitorDefaultToNearest);
-        var monitorInfo = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
-        if (monitor == IntPtr.Zero || !GetMonitorInfo(monitor, ref monitorInfo))
-        {
-            return false;
-        }
-
-        const int margin = 4;
-        var width = rectangle.Right - rectangle.Left;
-        var height = rectangle.Bottom - rectangle.Top;
-        var minimumLeft = monitorInfo.WorkArea.Left + margin;
-        var minimumTop = monitorInfo.WorkArea.Top + margin;
-        var maximumLeft = Math.Max(minimumLeft, monitorInfo.WorkArea.Right - width - margin);
-        var maximumTop = Math.Max(minimumTop, monitorInfo.WorkArea.Bottom - height - margin);
-        rectangle.Left = Math.Clamp(rectangle.Left, minimumLeft, maximumLeft);
-        rectangle.Top = Math.Clamp(rectangle.Top, minimumTop, maximumTop);
-        rectangle.Right = rectangle.Left + width;
-        rectangle.Bottom = rectangle.Top + height;
-        Marshal.StructureToPtr(rectangle, rectanglePointer, false);
-        return true;
-    }
-
-    private static bool TryConstrainSizingRectangle(int sizingEdge, IntPtr rectanglePointer)
-    {
-        if (rectanglePointer == IntPtr.Zero)
-        {
-            return false;
-        }
-
-        var rectangle = Marshal.PtrToStructure<NativeRectangle>(rectanglePointer);
-        var monitor = MonitorFromRect(ref rectangle, monitorDefaultToNearest);
-        var monitorInfo = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
-        if (monitor == IntPtr.Zero || !GetMonitorInfo(monitor, ref monitorInfo))
-        {
-            return false;
-        }
-
-        const int margin = 4;
-        var leftEdge = sizingEdge is 1 or 4 or 7;
-        var rightEdge = sizingEdge is 2 or 5 or 8;
-        var topEdge = sizingEdge is 3 or 4 or 5;
-        var bottomEdge = sizingEdge is 6 or 7 or 8;
-        if (leftEdge)
-        {
-            rectangle.Left = Math.Max(rectangle.Left, monitorInfo.WorkArea.Left + margin);
-        }
-
-        if (rightEdge)
-        {
-            rectangle.Right = Math.Min(rectangle.Right, monitorInfo.WorkArea.Right - margin);
-        }
-
-        if (topEdge)
-        {
-            rectangle.Top = Math.Max(rectangle.Top, monitorInfo.WorkArea.Top + margin);
-        }
-
-        if (bottomEdge)
-        {
-            rectangle.Bottom = Math.Min(rectangle.Bottom, monitorInfo.WorkArea.Bottom - margin);
-        }
-
-        Marshal.StructureToPtr(rectangle, rectanglePointer, false);
-        return true;
+        const int extendedStyleIndex = -20;
+        const long noActivateStyle = 0x08000000L;
+        var extendedStyle = GetWindowLongPtr(windowHandle, extendedStyleIndex).ToInt64();
+        _ = SetWindowLongPtr(windowHandle, extendedStyleIndex, new IntPtr(extendedStyle | noActivateStyle));
     }
 
     private async Task SavePlacementAsync()
@@ -557,26 +433,6 @@ public partial class CompactPowerWindow : Window
 
     private readonly record struct DisplayGeometry(double Left, double Top, double Width, double Height);
 
-    private const uint monitorDefaultToNearest = 2;
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct NativeRectangle
-    {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
-    }
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
-    private struct MonitorInfo
-    {
-        public int Size;
-        public NativeRectangle MonitorArea;
-        public NativeRectangle WorkArea;
-        public uint Flags;
-    }
-
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(
         IntPtr windowHandle,
@@ -584,13 +440,9 @@ public partial class CompactPowerWindow : Window
         ref uint attributeValue,
         int attributeSize);
 
-    [DllImport("user32.dll")]
-    private static extern IntPtr MonitorFromWindow(IntPtr windowHandle, uint flags);
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
+    private static extern IntPtr GetWindowLongPtr(IntPtr windowHandle, int index);
 
-    [DllImport("user32.dll")]
-    private static extern IntPtr MonitorFromRect(ref NativeRectangle rectangle, uint flags);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo monitorInfo);
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
+    private static extern IntPtr SetWindowLongPtr(IntPtr windowHandle, int index, IntPtr newValue);
 }

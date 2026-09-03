@@ -9,6 +9,7 @@
         WindowStyle="None"
         AllowsTransparency="True"
         ShowInTaskbar="False"
+        ShowActivated="False"
         Topmost="True"
         Icon="Assets/RxV4AManager.ico"
         Background="Transparent"
@@ -24,7 +25,7 @@
                     <ColumnDefinition Width="58" />
                 </Grid.ColumnDefinitions>
 
-                <Border Grid.Column="0" Background="Transparent" Cursor="SizeAll"
+                <Border Grid.Column="0" x:Name="DragGrip" Background="Transparent" Cursor="SizeAll"
                         ToolTip="ドラッグして移動" MouseLeftButtonDown="DragGrip_MouseLeftButtonDown">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
                         <Border Width="1" Height="22" Background="#71717A" Margin="0,0,2,0" />
