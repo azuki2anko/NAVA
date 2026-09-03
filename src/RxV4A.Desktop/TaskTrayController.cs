@@ -10,6 +10,7 @@ public sealed class TaskTrayController : IDisposable
     private readonly IDeviceManager _deviceManager;
     private readonly IControlOrchestrator _orchestrator;
     private readonly MainWindow _mainWindow;
+    private readonly SettingsWindow _settingsWindow;
     private readonly CompactPowerWindow _compactPowerWindow;
     private readonly Icon? _applicationIcon;
     private readonly Forms.NotifyIcon _notifyIcon;
@@ -19,12 +20,14 @@ public sealed class TaskTrayController : IDisposable
         IDeviceManager deviceManager,
         IControlOrchestrator orchestrator,
         MainWindow mainWindow,
+        SettingsWindow settingsWindow,
         CompactPowerWindow compactPowerWindow,
         Action requestExit)
     {
         _deviceManager = deviceManager;
         _orchestrator = orchestrator;
         _mainWindow = mainWindow;
+        _settingsWindow = settingsWindow;
         _compactPowerWindow = compactPowerWindow;
         _statusItem = new Forms.ToolStripMenuItem("未接続") { Enabled = false };
 
@@ -32,7 +35,8 @@ public sealed class TaskTrayController : IDisposable
         menu.Items.Add(_statusItem);
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("ミニ電源操作", null, (_, _) => _compactPowerWindow.ShowFromTray());
-        menu.Items.Add("メイン画面を開く", null, (_, _) => _mainWindow.ShowFromTray());
+        menu.Items.Add("操作画面を開く", null, (_, _) => _mainWindow.ShowFromTray());
+        menu.Items.Add("設定画面を開く", null, (_, _) => _settingsWindow.ShowFromTray());
         menu.Items.Add("状態を更新", null, async (_, _) => await RefreshAsync());
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("アンプ ON", null, async (_, _) => await _mainWindow.ExecutePowerAsync(MainPower.On));
@@ -46,11 +50,11 @@ public sealed class TaskTrayController : IDisposable
         _notifyIcon = new Forms.NotifyIcon
         {
             Icon = _applicationIcon ?? SystemIcons.Application,
-            Text = "RX-V4A Manager - 未接続",
+            Text = "Yamaha AV Manager - 未接続",
             ContextMenuStrip = menu,
             Visible = true
         };
-        _notifyIcon.DoubleClick += (_, _) => _compactPowerWindow.ShowFromTray();
+        _notifyIcon.DoubleClick += (_, _) => _mainWindow.ShowFromTray();
         _deviceManager.SnapshotChanged += DeviceManager_SnapshotChanged;
         _orchestrator.StateChanged += Orchestrator_StateChanged;
         Update(_deviceManager.Snapshot);
@@ -113,6 +117,6 @@ public sealed class TaskTrayController : IDisposable
             ? $"状態: {state}"
             : $"状態: {state} / ブロック: {string.Join(",", blockers)}";
         var suffix = blockers.Length == 0 ? state : mismatch ? "禁止中・外部ON" : "電源ON禁止中";
-        _notifyIcon.Text = $"RX-V4A Manager - {suffix}";
+        _notifyIcon.Text = $"Yamaha AV Manager - {suffix}";
     }
 }

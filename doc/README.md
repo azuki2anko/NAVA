@@ -1,4 +1,4 @@
-# RX-V4A Manager 文書索引
+# Yamaha AV Manager 文書索引
 
 更新日: 2026-09-03
 

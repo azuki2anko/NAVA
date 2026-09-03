@@ -1,6 +1,6 @@
 # コントリビューションガイド
 
-RX-V4A ManagerへのIssue、文書改善、テスト、コード変更を歓迎します。
+Yamaha AV ManagerへのIssue、文書改善、テスト、コード変更を歓迎します。
 
 ## 開発環境
 
@@ -9,10 +9,10 @@ RX-V4A ManagerへのIssue、文書改善、テスト、コード変更を歓迎�
 - Git
 
 ```powershell
-dotnet restore RxV4A.Manager.sln
-dotnet build RxV4A.Manager.sln -c Release --no-restore
-dotnet test RxV4A.Manager.sln -c Release --no-build --no-restore
-dotnet format RxV4A.Manager.sln --verify-no-changes --no-restore
+dotnet restore YamahaAv.Manager.sln
+dotnet build YamahaAv.Manager.sln -c Release --no-restore
+dotnet test YamahaAv.Manager.sln -c Release --no-build --no-restore
+dotnet format YamahaAv.Manager.sln --verify-no-changes --no-restore
 ```
 
 ## 設計原則

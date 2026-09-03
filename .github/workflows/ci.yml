@@ -30,16 +30,16 @@ jobs:
           dotnet-version: 10.0.302
 
       - name: Restore
-        run: dotnet restore RxV4A.Manager.sln
+        run: dotnet restore YamahaAv.Manager.sln
 
       - name: Build
-        run: dotnet build RxV4A.Manager.sln -c Release --no-restore
+        run: dotnet build YamahaAv.Manager.sln -c Release --no-restore
 
       - name: Test
-        run: dotnet test RxV4A.Manager.sln -c Release --no-build --no-restore
+        run: dotnet test YamahaAv.Manager.sln -c Release --no-build --no-restore
 
       - name: Verify formatting
-        run: dotnet format RxV4A.Manager.sln --verify-no-changes --no-restore
+        run: dotnet format YamahaAv.Manager.sln --verify-no-changes --no-restore
 
       - name: Verify self-contained publish
         run: dotnet publish src/RxV4A.Desktop/RxV4A.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o artifacts/publish

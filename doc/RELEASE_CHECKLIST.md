@@ -2,7 +2,7 @@
 
 所有者: `azuki2anko`
 
-推奨リポジトリ名: `rxv4a-manager`
+推奨リポジトリ名: `yamaha-av-manager`
 
 ライセンス: MIT / Copyright (c) 2026 anko
 
@@ -20,10 +20,10 @@
 ## 2. ローカル検証
 
 ```powershell
-dotnet restore RxV4A.Manager.sln
-dotnet build RxV4A.Manager.sln -c Release --no-restore
-dotnet test RxV4A.Manager.sln -c Release --no-build --no-restore
-dotnet format RxV4A.Manager.sln --verify-no-changes --no-restore
+dotnet restore YamahaAv.Manager.sln
+dotnet build YamahaAv.Manager.sln -c Release --no-restore
+dotnet test YamahaAv.Manager.sln -c Release --no-build --no-restore
+dotnet format YamahaAv.Manager.sln --verify-no-changes --no-restore
 dotnet publish src/RxV4A.Desktop/RxV4A.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o artifacts/publish
 ```
 

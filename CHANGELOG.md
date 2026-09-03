@@ -10,6 +10,11 @@
 - 日本語の利用説明書、APIガイド、公開チェックリスト
 - Issue／Pull Requestテンプレート、セキュリティポリシー、貢献ガイド
 
+### Changed
+
+- 公開製品名を「Yamaha AV Manager」へ変更
+- 日常操作画面を、円形ボリュームと電源・ミュート・ソース・音場操作中心の構成へ更新
+
 ## [0.1.0] - 未公開
 
 ### Added
@@ -21,5 +26,5 @@
 - グローバルホットキー、汎用アクティビティ、Power-on blocker、登録済みアクション契約
 - 構造化ログ、自動再接続、モックテスト
 
-[Unreleased]: https://github.com/azuki2anko/rxv4a-manager/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/azuki2anko/rxv4a-manager/releases/tag/v0.1.0
+[Unreleased]: https://github.com/azuki2anko/yamaha-av-manager/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/azuki2anko/yamaha-av-manager/releases/tag/v0.1.0

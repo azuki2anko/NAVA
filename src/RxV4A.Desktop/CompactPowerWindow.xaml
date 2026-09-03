@@ -11,7 +11,7 @@
         ShowInTaskbar="False"
         ShowActivated="False"
         Topmost="True"
-        Icon="Assets/RxV4AManager.ico"
+        Icon="Assets/YamahaAvManager.ico"
         Background="Transparent"
         Closing="Window_Closing"
         Loaded="Window_Loaded">

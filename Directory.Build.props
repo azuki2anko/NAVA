@@ -2,12 +2,12 @@
   <PropertyGroup>
     <Authors>anko</Authors>
     <Company>anko</Company>
-    <Product>RX-V4A Manager</Product>
+    <Product>Yamaha AV Manager</Product>
     <Description>Windows desktop controller for Yamaha Extended Control compatible amplifiers.</Description>
     <Copyright>Copyright (c) 2026 anko</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryType>git</RepositoryType>
-    <RepositoryUrl>https://github.com/azuki2anko/rxv4a-manager</RepositoryUrl>
+    <RepositoryUrl>https://github.com/azuki2anko/yamaha-av-manager</RepositoryUrl>
     <NeutralLanguage>ja-JP</NeutralLanguage>
     <VersionPrefix>0.1.0</VersionPrefix>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>

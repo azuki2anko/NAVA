@@ -42,7 +42,7 @@ public static class LocalApiApplication
         builder.Logging.AddProvider(new JsonFileLoggerProvider(
             Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "RXV4A Manager",
+                "Yamaha AV Manager",
                 "logs")));
 
         builder.Services.AddSingleton(settings);

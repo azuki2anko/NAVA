@@ -4,9 +4,9 @@
 
 ## 確認項目
 
-- [ ] `dotnet build RxV4A.Manager.sln -c Release`が成功する
-- [ ] `dotnet test RxV4A.Manager.sln -c Release`が成功する
-- [ ] `dotnet format RxV4A.Manager.sln --verify-no-changes`が成功する
+- [ ] `dotnet build YamahaAv.Manager.sln -c Release`が成功する
+- [ ] `dotnet test YamahaAv.Manager.sln -c Release`が成功する
+- [ ] `dotnet format YamahaAv.Manager.sln --verify-no-changes`が成功する
 - [ ] `getFeatures`にない操作や値を送信しない
 - [ ] 実IP、MACアドレス、機器ID、トークン、個人パスを含めていない
 - [ ] `.private/`または`private/`を参照していない

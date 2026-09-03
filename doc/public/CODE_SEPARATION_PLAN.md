@@ -29,7 +29,7 @@ RxV4A.Host
 RxV4A.Core
 ```
 
-`RxV4A.Manager.sln`は公開3プロジェクトと公開テスト2プロジェクトだけを含む。private版は公開リポジトリをupstreamとして取り込み、必要な実装を`IRegisteredAction`として追加する。公開版からprivateプロジェクトへの参照は作らない。
+`YamahaAv.Manager.sln`は公開3プロジェクトと公開テスト2プロジェクトだけを含む。private版は公開リポジトリをupstreamとして取り込み、必要な実装を`IRegisteredAction`として追加する。公開版からprivateプロジェクトへの参照は作らない。
 
 ## マイルストーン
 

@@ -1,4 +1,4 @@
-# RX-V4A Manager 公開版実装ガイド
+# Yamaha AV Manager 公開版実装ガイド
 
 正式要件は[`public/01_REQUIREMENTS_PUBLIC.md`](public/01_REQUIREMENTS_PUBLIC.md)であり、本書は実装構造の補助説明です。
 

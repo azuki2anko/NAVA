@@ -1,4 +1,4 @@
-# RX-V4A Manager 公開版要件定義書
+# Yamaha AV Manager 公開版要件定義書
 
 版: 2.1
 
@@ -152,7 +152,7 @@
 
 ### PUB-FR-800 設定・ログ・再接続
 
-- PUB-FR-801: 設定を`%LocalAppData%\RXV4A Manager\settings.json`へ保存する。
+- PUB-FR-801: 設定を`%LocalAppData%\Yamaha AV Manager\settings.json`へ保存する。
 - PUB-FR-802: 構造化JSON Linesログを日次管理する。
 - PUB-FR-803: IP、MAC、機器ID、トークン、個人識別子を共有ログへ出さない。
 - PUB-FR-804: 接続・要求タイムアウト、キャンセル、低頻度ポーリング、自動再接続を実装する。

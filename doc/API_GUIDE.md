@@ -1,6 +1,6 @@
 # localhost APIガイド
 
-RX-V4A Managerは、PC内のほかのアプリから安全に利用するための型付きREST APIを提供します。
+Yamaha AV Managerは、PC内のほかのアプリから安全に利用するための型付きREST APIを提供します。
 
 ## 基本情報
 

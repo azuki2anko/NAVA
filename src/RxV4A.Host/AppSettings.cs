@@ -174,7 +174,7 @@ public sealed class JsonSettingsStore : ISettingsStore
     public JsonSettingsStore(string? localAppDataPath = null)
     {
         var root = localAppDataPath ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        SettingsPath = Path.Combine(root, "RXV4A Manager", "settings.json");
+        SettingsPath = Path.Combine(root, "Yamaha AV Manager", "settings.json");
     }
 
     public string SettingsPath { get; }

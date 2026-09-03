@@ -1,9 +1,17 @@
 using System.ComponentModel;
 using System.Globalization;
 using System.Windows;
-using System.Windows.Interop;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Shapes;
 using RxV4A.Core;
 using RxV4A.Host;
+using MouseEventArgs = System.Windows.Input.MouseEventArgs;
+using Point = System.Windows.Point;
+using Size = System.Windows.Size;
+using Brushes = System.Windows.Media.Brushes;
+using Color = System.Windows.Media.Color;
+using MessageBox = System.Windows.MessageBox;
 
 namespace RxV4A.Desktop;
 
@@ -11,58 +19,28 @@ public partial class MainWindow : Window
 {
     private readonly IDeviceManager _deviceManager;
     private readonly IControlOrchestrator _orchestrator;
-    private readonly IRegisteredActionService _registeredActions;
-    private readonly AppSettings _settings;
-    private readonly ISettingsStore _settingsStore;
-    private readonly GlobalHotkeyService _globalHotkeys;
-    private HwndSource? _windowSource;
+    private readonly SettingsWindow _settingsWindow;
     private bool _allowClose;
-    private bool _pingConfirmationPromptActive;
-    private bool _updatingDailyControls;
-    private string? _declinedPingConfirmationSignature;
+    private bool _updatingControls;
+    private bool _volumeDragging;
+    private bool _operationInProgress;
+    private decimal _volumeMinimum = -80m;
+    private decimal _volumeMaximum = 16.5m;
+    private decimal _volumeStep = 0.5m;
+    private decimal _displayedVolume = -40m;
 
     public MainWindow(
         IDeviceManager deviceManager,
         IControlOrchestrator orchestrator,
-        IRegisteredActionService registeredActions,
-        AppSettings settings,
-        ISettingsStore settingsStore)
+        SettingsWindow settingsWindow)
     {
         _deviceManager = deviceManager;
         _orchestrator = orchestrator;
-        _registeredActions = registeredActions;
-        _settings = settings;
-        _settingsStore = settingsStore;
-        _globalHotkeys = new GlobalHotkeyService(settings, ExecuteHotkeyActionAsync);
+        _settingsWindow = settingsWindow;
         InitializeComponent();
-        SourceInitialized += (_, _) =>
-        {
-            var windowHandle = new WindowInteropHelper(this).Handle;
-            _windowSource = HwndSource.FromHwnd(windowHandle);
-            _windowSource?.AddHook(MainWindowMessageHook);
-            _globalHotkeys.RegistrationsChanged += GlobalHotkeys_RegistrationsChanged;
-            _globalHotkeys.Initialize(windowHandle);
-            UpdateHotkeyStatus(_globalHotkeys.Registrations);
-        };
-        ManualHostTextBox.Text = deviceManager.Settings.ManualHost ?? string.Empty;
-        var interfaceOptions = new List<DiscoveryInterfaceOption>
-        {
-            new("自動選択（すべての有効なNIC）", null)
-        };
-        interfaceOptions.AddRange(deviceManager.GetDiscoveryNetworkInterfaces().Select(item =>
-            new DiscoveryInterfaceOption(
-                $"{item.Name}  /{item.PrefixLength}" +
-                (item.HasDefaultGateway ? "  （既定経路あり）" : string.Empty),
-                item.Id)));
-        DiscoveryNetworkInterfaceComboBox.ItemsSource = interfaceOptions;
-        DiscoveryNetworkInterfaceComboBox.SelectedItem = interfaceOptions.FirstOrDefault(item =>
-            string.Equals(item.Id, deviceManager.Settings.DiscoveryNetworkInterfaceId,
-                StringComparison.OrdinalIgnoreCase)) ?? interfaceOptions[0];
         _deviceManager.SnapshotChanged += DeviceManager_SnapshotChanged;
         _orchestrator.StateChanged += Orchestrator_StateChanged;
-        Loaded += (_, _) => MaybePromptForBroadPingScan(_deviceManager.Snapshot);
         UpdateSnapshot(_deviceManager.Snapshot);
-        UpdateControlState();
     }
 
     public void ShowFromTray()
@@ -73,51 +51,359 @@ public partial class MainWindow : Window
         Activate();
     }
 
-    public void StartMinimizedToTray()
+    public void AllowClose()
     {
-        ShowInTaskbar = false;
-        _ = new WindowInteropHelper(this).EnsureHandle();
+        _allowClose = true;
+        _deviceManager.SnapshotChanged -= DeviceManager_SnapshotChanged;
+        _orchestrator.StateChanged -= Orchestrator_StateChanged;
     }
 
-    public void AllowClose() => _allowClose = true;
+    public async Task ExecutePowerAsync(MainPower power) => await SetPowerAsync(power);
 
-    public event EventHandler? MinimizedToTray;
+    private void DeviceManager_SnapshotChanged(object? sender, DeviceSnapshot snapshot) =>
+        Dispatcher.BeginInvoke(() => UpdateSnapshot(snapshot));
 
-    public async Task ExecutePowerAsync(MainPower power)
+    private void Orchestrator_StateChanged(object? sender, EventArgs e) =>
+        Dispatcher.BeginInvoke(() => UpdateSnapshot(_deviceManager.Snapshot));
+
+    private void UpdateSnapshot(DeviceSnapshot snapshot)
     {
-        await RunControlOperationAsync(() => _orchestrator.SetPowerAsync(power, allowBlockedOn: false));
+        _updatingControls = true;
+        try
+        {
+            var connected = snapshot.ConnectionState == DeviceConnectionState.Connected;
+            var status = snapshot.MainZone;
+            var capabilities = snapshot.Capabilities;
+            var zone = capabilities?.FindZone("main");
+
+            ConnectionText.Text = snapshot.ConnectionState switch
+            {
+                DeviceConnectionState.Connected => "接続済み",
+                DeviceConnectionState.Connecting => "接続中…",
+                DeviceConnectionState.Reconnecting => "再接続中…",
+                DeviceConnectionState.Unsupported => "未対応の機器",
+                _ => "未接続"
+            };
+            DeviceText.Text = capabilities is null
+                ? SnapshotMessage(snapshot)
+                : $"{capabilities.DeviceInfo.ModelName}  •  API {capabilities.DeviceInfo.ApiVersion}";
+            ConnectionIndicator.Fill = connected
+                ? new SolidColorBrush(Color.FromRgb(101, 230, 209))
+                : snapshot.ConnectionState is DeviceConnectionState.Connecting or DeviceConnectionState.Reconnecting
+                    ? new SolidColorBrush(Color.FromRgb(251, 191, 36))
+                    : new SolidColorBrush(Color.FromRgb(100, 116, 139));
+
+            var powerOn = string.Equals(status?.Power, "on", StringComparison.OrdinalIgnoreCase);
+            PowerToggle.IsChecked = powerOn;
+            PowerStateText.Text = powerOn ? "POWER ON" : "STANDBY";
+            PowerStateText.Foreground = powerOn
+                ? new SolidColorBrush(Color.FromRgb(101, 230, 209))
+                : Brushes.WhiteSmoke;
+            PowerToggle.IsEnabled = !_operationInProgress && connected &&
+                                    capabilities?.SupportsZoneFunction("main", "power") == true;
+
+            var hasMute = capabilities?.SupportsZoneFunction("main", "mute") == true;
+            MuteToggle.Visibility = hasMute ? Visibility.Visible : Visibility.Collapsed;
+            MuteToggle.IsChecked = status?.Mute == true;
+            MuteToggle.IsEnabled = !_operationInProgress && connected;
+            MuteStateText.Text = status?.Mute == true ? "ON" : "OFF";
+
+            var inputs = zone?.Inputs.Select(input => input.Id)
+                .Where(ApplicationScope.IsOperationalInput).ToArray() ?? [];
+            SourceList.ItemsSource = inputs;
+            SourceList.SelectedItem = inputs.FirstOrDefault(input =>
+                string.Equals(input, status?.Input, StringComparison.OrdinalIgnoreCase));
+            SourceText.Text = status?.Input ?? "—";
+            SourceButton.IsEnabled = !_operationInProgress && connected && inputs.Length > 0;
+
+            var programs = zone?.SoundPrograms.ToArray() ?? [];
+            SoundFieldList.ItemsSource = programs;
+            SoundFieldList.SelectedItem = programs.FirstOrDefault(program =>
+                string.Equals(program, status?.SoundProgram, StringComparison.OrdinalIgnoreCase));
+            SoundFieldText.Text = status?.SoundProgram ?? "—";
+            SoundFieldButton.IsEnabled = !_operationInProgress && connected && programs.Length > 0;
+
+            var range = capabilities?.FindZoneRange("main", "volume");
+            var hasVolume = capabilities?.SupportsZoneFunction("main", "volume") == true &&
+                            range?.Minimum is decimal && range.Maximum is decimal && range.Step is > 0;
+            if (hasVolume)
+            {
+                _volumeMinimum = range!.Minimum!.Value;
+                _volumeMaximum = range.Maximum!.Value;
+                _volumeStep = range.Step!.Value;
+            }
+
+            if (status?.Volume is decimal volume && !_volumeDragging)
+            {
+                _displayedVolume = Math.Clamp(volume, _volumeMinimum, _volumeMaximum);
+            }
+
+            VolumeDial.IsEnabled = !_operationInProgress && connected && hasVolume;
+            VolumeDownButton.IsEnabled = VolumeDial.IsEnabled;
+            VolumeUpButton.IsEnabled = VolumeDial.IsEnabled;
+            VolumeDial.Opacity = hasVolume ? 1 : 0.38;
+            UpdateVolumeVisual();
+            if (status?.Volume is not decimal)
+            {
+                VolumeValueText.Text = "—";
+                VolumeUnitText.Text = string.Empty;
+            }
+            else
+            {
+                VolumeUnitText.Text = string.IsNullOrWhiteSpace(status.ActualVolume?.Unit)
+                    ? "dB"
+                    : status.ActualVolume.Unit;
+            }
+
+            var blockers = _orchestrator.ActiveBlockers;
+            StatusText.Text = blockers.Count > 0
+                ? $"電源ON禁止中  •  {string.Join(", ", blockers)}"
+                : connected
+                    ? $"最終更新  {snapshot.UpdatedAt.ToLocalTime():HH:mm:ss}"
+                    : SnapshotMessage(snapshot);
+            StatusText.Foreground = blockers.Count > 0
+                ? new SolidColorBrush(Color.FromRgb(251, 191, 36))
+                : new SolidColorBrush(Color.FromRgb(139, 154, 176));
+        }
+        finally
+        {
+            _updatingControls = false;
+        }
     }
 
-    private async void PowerOnButton_Click(object sender, RoutedEventArgs e) =>
-        await ExecutePowerAsync(MainPower.On);
-
-    private async void StandbyButton_Click(object sender, RoutedEventArgs e) =>
-        await ExecutePowerAsync(MainPower.Standby);
-
-    private async void RefreshButton_Click(object sender, RoutedEventArgs e)
+    private static string SnapshotMessage(DeviceSnapshot snapshot) => snapshot.ErrorCode switch
     {
-        _declinedPingConfirmationSignature = null;
-        await RunUiOperationAsync(() => _deviceManager.RefreshAsync());
-        MaybePromptForBroadPingScan(_deviceManager.Snapshot);
+        "ping_scan_confirmation_required" => "設定画面でネットワーク探索を確認してください",
+        "ping_scan_too_large" => "設定画面で接続先を指定してください",
+        "device_not_found" => "対応アンプが見つかりません",
+        _ => "アンプを検索しています…"
+    };
+
+    private async void PowerToggle_Click(object sender, RoutedEventArgs e)
+    {
+        if (_updatingControls)
+        {
+            return;
+        }
+
+        await SetPowerAsync(PowerToggle.IsChecked == true ? MainPower.On : MainPower.Standby);
     }
 
-    private async void SaveHostButton_Click(object sender, RoutedEventArgs e)
+    private async Task SetPowerAsync(MainPower power)
     {
-        var interfaceId = (DiscoveryNetworkInterfaceComboBox.SelectedItem as DiscoveryInterfaceOption)?.Id;
-        _declinedPingConfirmationSignature = null;
-        await RunUiOperationAsync(() =>
-            _deviceManager.UpdateConnectionSettingsAsync(ManualHostTextBox.Text, interfaceId));
-        MaybePromptForBroadPingScan(_deviceManager.Snapshot);
+        await RunOperationAsync(async () =>
+        {
+            var result = await _orchestrator.SetPowerAsync(power, allowBlockedOn: false);
+            if (result.Outcome is ControlOutcome.Blocked or ControlOutcome.PartialFailure or ControlOutcome.Failed)
+            {
+                MessageBox.Show(result.Message, "Yamaha AV Manager", MessageBoxButton.OK,
+                    result.Outcome == ControlOutcome.Blocked ? MessageBoxImage.Information : MessageBoxImage.Warning);
+            }
+        });
+    }
+
+    private async void MuteToggle_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_updatingControls)
+        {
+            await RunOperationAsync(() => _deviceManager.SetMainMuteAsync(MuteToggle.IsChecked == true));
+        }
+    }
+
+    private void SourceButton_Click(object sender, RoutedEventArgs e)
+    {
+        SourcePopup.IsOpen = !SourcePopup.IsOpen;
+        if (SourceList.SelectedItem is not null)
+        {
+            SourceList.ScrollIntoView(SourceList.SelectedItem);
+        }
+    }
+
+    private async void SourceList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (_updatingControls || !SourcePopup.IsOpen || SourceList.SelectedItem is not string input)
+        {
+            return;
+        }
+
+        SourcePopup.IsOpen = false;
+        await RunOperationAsync(() => _deviceManager.SetMainInputAsync(input));
+    }
+
+    private void SoundFieldButton_Click(object sender, RoutedEventArgs e)
+    {
+        SoundFieldPopup.IsOpen = !SoundFieldPopup.IsOpen;
+        if (SoundFieldList.SelectedItem is not null)
+        {
+            SoundFieldList.ScrollIntoView(SoundFieldList.SelectedItem);
+        }
+    }
+
+    private async void SoundFieldList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (_updatingControls || !SoundFieldPopup.IsOpen || SoundFieldList.SelectedItem is not string program)
+        {
+            return;
+        }
+
+        SoundFieldPopup.IsOpen = false;
+        await RunOperationAsync(() => _deviceManager.SetMainSoundProgramAsync(program));
+    }
+
+    private void VolumeDial_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (!VolumeDial.IsEnabled)
+        {
+            return;
+        }
+
+        _volumeDragging = true;
+        VolumeDial.CaptureMouse();
+        SetVolumeFromPoint(e.GetPosition(VolumeDial));
+    }
+
+    private void VolumeDial_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (_volumeDragging && e.LeftButton == MouseButtonState.Pressed)
+        {
+            SetVolumeFromPoint(e.GetPosition(VolumeDial));
+        }
+    }
+
+    private async void VolumeDial_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_volumeDragging)
+        {
+            return;
+        }
+
+        SetVolumeFromPoint(e.GetPosition(VolumeDial));
+        _volumeDragging = false;
+        VolumeDial.ReleaseMouseCapture();
+        await CommitVolumeAsync();
+    }
+
+    private async void VolumeDial_MouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (!VolumeDial.IsEnabled)
+        {
+            return;
+        }
+
+        ChangeVolume(e.Delta > 0 ? _volumeStep : -_volumeStep);
+        await CommitVolumeAsync();
+        e.Handled = true;
+    }
+
+    private async void VolumeDownButton_Click(object sender, RoutedEventArgs e)
+    {
+        ChangeVolume(-_volumeStep);
+        await CommitVolumeAsync();
+    }
+
+    private async void VolumeUpButton_Click(object sender, RoutedEventArgs e)
+    {
+        ChangeVolume(_volumeStep);
+        await CommitVolumeAsync();
+    }
+
+    private void ChangeVolume(decimal delta)
+    {
+        _displayedVolume = SnapVolume(_displayedVolume + delta);
+        UpdateVolumeVisual();
+    }
+
+    private void SetVolumeFromPoint(Point point)
+    {
+        var center = VolumeDial.ActualWidth / 2d;
+        var angle = Math.Atan2(point.X - center, center - point.Y) * 180d / Math.PI;
+        angle = Math.Clamp(angle, -135d, 135d);
+        var ratio = (angle + 135d) / 270d;
+        _displayedVolume = SnapVolume(_volumeMinimum + (decimal)ratio * (_volumeMaximum - _volumeMinimum));
+        UpdateVolumeVisual();
+    }
+
+    private decimal SnapVolume(decimal value)
+    {
+        var steps = Math.Round((value - _volumeMinimum) / _volumeStep, MidpointRounding.AwayFromZero);
+        return Math.Clamp(_volumeMinimum + steps * _volumeStep, _volumeMinimum, _volumeMaximum);
+    }
+
+    private async Task CommitVolumeAsync() =>
+        await RunOperationAsync(() => _deviceManager.SetMainVolumeAsync(_displayedVolume));
+
+    private void UpdateVolumeVisual()
+    {
+        var span = _volumeMaximum - _volumeMinimum;
+        var ratio = span <= 0 ? 0d : (double)((_displayedVolume - _volumeMinimum) / span);
+        ratio = Math.Clamp(ratio, 0d, 1d);
+        var endAngle = -135d + ratio * 270d;
+        VolumeIndicatorLine.RenderTransform = new RotateTransform(endAngle, 143, 143);
+
+        if (ratio <= 0.001)
+        {
+            VolumeArc.Data = Geometry.Empty;
+        }
+        else
+        {
+            const double center = 143d;
+            const double radius = 128d;
+            var start = PointOnCircle(center, radius, -135d);
+            var end = PointOnCircle(center, radius, endAngle);
+            var figure = new PathFigure { StartPoint = start, IsClosed = false };
+            figure.Segments.Add(new ArcSegment(end, new Size(radius, radius), 0,
+                ratio > 0.5, SweepDirection.Clockwise, true));
+            VolumeArc.Data = new PathGeometry([figure]);
+        }
+
+        VolumeValueText.Text = _displayedVolume.ToString("0.0", CultureInfo.CurrentCulture);
+    }
+
+    private static Point PointOnCircle(double center, double radius, double angle)
+    {
+        var radians = angle * Math.PI / 180d;
+        return new Point(center + radius * Math.Sin(radians), center - radius * Math.Cos(radians));
+    }
+
+    private async void RefreshButton_Click(object sender, RoutedEventArgs e) =>
+        await RunOperationAsync(() => _deviceManager.RefreshAsync());
+
+    private void SettingsButton_Click(object sender, RoutedEventArgs e) => _settingsWindow.ShowFromTray();
+
+    private async Task RunOperationAsync(Func<Task> operation)
+    {
+        if (_operationInProgress)
+        {
+            return;
+        }
+
+        _operationInProgress = true;
+        UpdateSnapshot(_deviceManager.Snapshot);
+        try
+        {
+            await operation();
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(exception switch
+            {
+                DeviceUnavailableException => "対応アンプに接続されていません。",
+                CapabilityNotSupportedException => "この機器では利用できない操作です。",
+                OperationCanceledException => "操作がタイムアウトしました。",
+                _ => "操作を完了できませんでした。ログを確認してください。"
+            }, "Yamaha AV Manager", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            _operationInProgress = false;
+            UpdateSnapshot(_deviceManager.Snapshot);
+        }
     }
 
     private void Window_Closing(object? sender, CancelEventArgs e)
     {
         if (_allowClose)
         {
-            _globalHotkeys.Dispose();
-            _windowSource?.RemoveHook(MainWindowMessageHook);
-            _deviceManager.SnapshotChanged -= DeviceManager_SnapshotChanged;
-            _orchestrator.StateChanged -= Orchestrator_StateChanged;
             return;
         }
 
@@ -128,523 +414,10 @@ public partial class MainWindow : Window
 
     private void Window_StateChanged(object sender, EventArgs e)
     {
-        if (WindowState != WindowState.Minimized)
+        if (WindowState == WindowState.Minimized)
         {
-            return;
-        }
-
-        MinimizeToTray();
-    }
-
-    private IntPtr MainWindowMessageHook(
-        IntPtr hwnd,
-        int message,
-        IntPtr wParam,
-        IntPtr lParam,
-        ref bool handled)
-    {
-        const int wmSystemCommand = 0x0112;
-        const int systemCommandMask = 0xFFF0;
-        const int systemCommandMinimize = 0xF020;
-        if (message == wmSystemCommand &&
-            (wParam.ToInt64() & systemCommandMask) == systemCommandMinimize)
-        {
-            handled = true;
-            Dispatcher.BeginInvoke(MinimizeToTray);
-        }
-
-        return IntPtr.Zero;
-    }
-
-    private void MinimizeToTray()
-    {
-        ShowInTaskbar = false;
-        Hide();
-        MinimizedToTray?.Invoke(this, EventArgs.Empty);
-    }
-
-    private void DeviceManager_SnapshotChanged(object? sender, DeviceSnapshot snapshot) =>
-        Dispatcher.BeginInvoke(() => UpdateSnapshot(snapshot));
-
-    private void Orchestrator_StateChanged(object? sender, EventArgs e) =>
-        Dispatcher.BeginInvoke(UpdateControlState);
-
-    private void UpdateSnapshot(DeviceSnapshot snapshot)
-    {
-        ConnectionText.Text = snapshot.ConnectionState switch
-        {
-            DeviceConnectionState.Connected => "接続中",
-            DeviceConnectionState.Connecting => "接続しています…",
-            DeviceConnectionState.Reconnecting => "再接続しています…",
-            DeviceConnectionState.Unsupported => "対象外の機器",
-            _ when snapshot.ErrorCode == "ping_scan_confirmation_required" => "ping探索の確認待ち",
-            _ when snapshot.ErrorCode == "ping_scan_too_large" => "サブネットが広すぎます",
-            _ => "未接続"
-        };
-        DeviceText.Text = snapshot.Capabilities is null
-            ? snapshot.ErrorCode switch
-            {
-                "ping_scan_confirmation_required" => "広いサブネットのping探索には確認が必要です",
-                "ping_scan_too_large" => "サブネットが/16未満です。接続先を手動指定してください",
-                "device_not_found" => "SSDPおよびping探索で見つかりません",
-                _ => "—"
-            }
-            : $"{snapshot.Capabilities.DeviceInfo.ModelName}  (API {snapshot.Capabilities.DeviceInfo.ApiVersion})";
-        PowerText.Text = snapshot.MainZone?.Power ?? "—";
-        PlaybackText.Text = snapshot.MainZone is null
-            ? "—"
-            : $"{snapshot.MainZone.Input ?? "—"} / {FormatVolume(snapshot.MainZone)}";
-        UpdatedText.Text = snapshot.UpdatedAt == DateTimeOffset.MinValue
-            ? "—"
-            : snapshot.UpdatedAt.ToLocalTime().ToString("yyyy/MM/dd HH:mm:ss", CultureInfo.CurrentCulture);
-
-        var canOperate = snapshot.ConnectionState == DeviceConnectionState.Connected &&
-                         snapshot.Capabilities?.SupportsZoneFunction("main", "power") == true;
-        PowerOnButton.IsEnabled = canOperate;
-        StandbyButton.IsEnabled = canOperate;
-        UpdateDailyControls(snapshot);
-        UpdateControlState();
-        MaybePromptForBroadPingScan(snapshot);
-    }
-
-    private void UpdateDailyControls(DeviceSnapshot snapshot)
-    {
-        _updatingDailyControls = true;
-        try
-        {
-            var connected = snapshot.ConnectionState == DeviceConnectionState.Connected;
-            var capabilities = snapshot.Capabilities;
-            var zone = capabilities?.FindZone("main");
-            var status = snapshot.MainZone;
-
-            var inputs = zone?.Inputs
-                .Select(input => input.Id)
-                .Where(ApplicationScope.IsOperationalInput)
-                .ToArray() ?? [];
-            InputPanel.Visibility = inputs.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-            InputComboBox.ItemsSource = inputs;
-            InputComboBox.SelectedItem = inputs.FirstOrDefault(input =>
-                string.Equals(input, status?.Input, StringComparison.OrdinalIgnoreCase));
-            InputComboBox.IsEnabled = connected;
-            SetInputButton.IsEnabled = connected;
-
-            var volumeRange = capabilities?.FindZoneRange("main", "volume");
-            var hasVolume = capabilities?.SupportsZoneFunction("main", "volume") == true &&
-                            volumeRange?.Minimum is decimal &&
-                            volumeRange.Maximum is decimal &&
-                            volumeRange.Step is > 0;
-            VolumePanel.Visibility = hasVolume ? Visibility.Visible : Visibility.Collapsed;
-            if (hasVolume)
-            {
-                VolumeSlider.Minimum = (double)volumeRange!.Minimum!.Value;
-                VolumeSlider.Maximum = (double)volumeRange.Maximum!.Value;
-                VolumeSlider.TickFrequency = (double)volumeRange.Step!.Value;
-                VolumeSlider.IsEnabled = connected;
-                SetVolumeButton.IsEnabled = connected;
-                if (status?.Volume is decimal volume)
-                {
-                    VolumeSlider.Value = Math.Clamp((double)volume, VolumeSlider.Minimum, VolumeSlider.Maximum);
-                }
-
-                VolumeValueText.Text = FormatValue((decimal)VolumeSlider.Value);
-                VolumeSlider.ToolTip = $"{volumeRange.Minimum} ～ {volumeRange.Maximum} / {volumeRange.Step}刻み";
-            }
-
-            SetBooleanControl(MutePanel, MuteCheckBox, capabilities, "mute", status?.Mute, connected);
-
-            var programs = zone?.SoundPrograms.ToArray() ?? [];
-            var hasPrograms = capabilities?.SupportsZoneFunction("main", "sound_program") == true &&
-                              programs.Length > 0;
-            SoundProgramPanel.Visibility = hasPrograms ? Visibility.Visible : Visibility.Collapsed;
-            SoundProgramComboBox.ItemsSource = programs;
-            SoundProgramComboBox.SelectedItem = programs.FirstOrDefault(program =>
-                string.Equals(program, status?.SoundProgram, StringComparison.OrdinalIgnoreCase));
-            SoundProgramComboBox.IsEnabled = connected;
-            SetSoundProgramButton.IsEnabled = connected;
-
-            SetBooleanControl(null, Surround3dCheckBox, capabilities, "surround_3d", status?.Surround3d, connected);
-            SetBooleanControl(null, DirectCheckBox, capabilities, "direct", status?.Direct, connected);
-            SetBooleanControl(null, PureDirectCheckBox, capabilities, "pure_direct", status?.PureDirect, connected);
-            SetBooleanControl(null, EnhancerCheckBox, capabilities, "enhancer", status?.Enhancer, connected);
-            ProcessingPanel.Visibility = ProcessingPanel.Children.OfType<System.Windows.Controls.CheckBox>()
-                .Any(control => control.Visibility == Visibility.Visible)
-                ? Visibility.Visible
-                : Visibility.Collapsed;
-
-            var hasTone = capabilities?.SupportsZoneFunction("main", "tone_control") == true;
-            TonePanel.Visibility = hasTone ? Visibility.Visible : Visibility.Collapsed;
-            TonePanel.IsEnabled = connected;
-            if (hasTone)
-            {
-                SetModes(ToneModeComboBox, zone!.ToneControlModes, status?.ToneControl?.Mode);
-                BassTextBox.Text = FormatValue(status?.ToneControl?.Bass);
-                TrebleTextBox.Text = FormatValue(status?.ToneControl?.Treble);
-                SetRangeToolTip(BassTextBox, capabilities!.FindZoneRange("main", "tone_control"));
-                SetRangeToolTip(TrebleTextBox, capabilities.FindZoneRange("main", "tone_control"));
-            }
-
-            var hasEqualizer = capabilities?.SupportsZoneFunction("main", "equalizer") == true;
-            EqualizerPanel.Visibility = hasEqualizer ? Visibility.Visible : Visibility.Collapsed;
-            EqualizerPanel.IsEnabled = connected;
-            if (hasEqualizer)
-            {
-                SetModes(EqualizerModeComboBox, zone!.EqualizerModes, status?.Equalizer?.Mode);
-                EqualizerLowTextBox.Text = FormatValue(status?.Equalizer?.Low);
-                EqualizerMidTextBox.Text = FormatValue(status?.Equalizer?.Mid);
-                EqualizerHighTextBox.Text = FormatValue(status?.Equalizer?.High);
-                var range = capabilities!.FindZoneRange("main", "equalizer");
-                SetRangeToolTip(EqualizerLowTextBox, range);
-                SetRangeToolTip(EqualizerMidTextBox, range);
-                SetRangeToolTip(EqualizerHighTextBox, range);
-            }
-
-            var balanceRange = capabilities?.FindZoneRange("main", "balance");
-            var hasBalance = capabilities?.SupportsZoneFunction("main", "balance") == true &&
-                             balanceRange is not null;
-            BalancePanel.Visibility = hasBalance ? Visibility.Visible : Visibility.Collapsed;
-            BalancePanel.IsEnabled = connected;
-            if (hasBalance)
-            {
-                BalanceTextBox.Text = FormatValue(status?.Balance);
-                SetRangeToolTip(BalanceTextBox, balanceRange);
-            }
-
-            CapabilityNoteText.Text = capabilities is null
-                ? "接続後、機器が公式APIで広告した操作だけを表示します。"
-                : string.Equals(capabilities.DeviceInfo.ModelName, "RX-V4A", StringComparison.OrdinalIgnoreCase)
-                    ? "RX-V4A実機確認対象。広告されない機能は表示しません。"
-                    : "公式APIとの互換動作です。この機種での実機確認は行っていません。";
-        }
-        finally
-        {
-            _updatingDailyControls = false;
+            ShowInTaskbar = false;
+            Hide();
         }
     }
-
-    private static void SetBooleanControl(
-        FrameworkElement? panel,
-        System.Windows.Controls.CheckBox control,
-        CapabilitySnapshot? capabilities,
-        string capability,
-        bool? value,
-        bool connected)
-    {
-        var supported = capabilities?.SupportsZoneFunction("main", capability) == true;
-        (panel ?? control).Visibility = supported ? Visibility.Visible : Visibility.Collapsed;
-        control.IsEnabled = connected;
-        control.IsChecked = value;
-    }
-
-    private static void SetModes(
-        System.Windows.Controls.ComboBox comboBox,
-        IReadOnlyList<string> advertisedModes,
-        string? currentMode)
-    {
-        var modes = advertisedModes.Count > 0 ? advertisedModes : ["manual"];
-        comboBox.ItemsSource = modes;
-        comboBox.SelectedItem = modes.FirstOrDefault(mode =>
-            string.Equals(mode, currentMode, StringComparison.OrdinalIgnoreCase)) ?? modes[0];
-    }
-
-    private static void SetRangeToolTip(FrameworkElement control, RangeStepFeature? range) =>
-        control.ToolTip = range?.Minimum is decimal minimum &&
-                          range.Maximum is decimal maximum &&
-                          range.Step is decimal step
-            ? $"{minimum} ～ {maximum} / {step}刻み"
-            : "機器から値域を取得できません";
-
-    private async void SetInputButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (InputComboBox.SelectedItem is string input)
-        {
-            await RunUiOperationAsync(() => _deviceManager.SetMainInputAsync(input));
-        }
-    }
-
-    private async void SetVolumeButton_Click(object sender, RoutedEventArgs e) =>
-        await RunUiOperationAsync(() => _deviceManager.SetMainVolumeAsync(GetSnappedVolume()));
-
-    private void VolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-    {
-        if (VolumeValueText is not null)
-        {
-            VolumeValueText.Text = FormatValue((decimal)e.NewValue);
-        }
-    }
-
-    private async void MuteCheckBox_Click(object sender, RoutedEventArgs e) =>
-        await RunBooleanOperationAsync(value => _deviceManager.SetMainMuteAsync(value), MuteCheckBox);
-
-    private async void SetSoundProgramButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (SoundProgramComboBox.SelectedItem is string program)
-        {
-            await RunUiOperationAsync(() => _deviceManager.SetMainSoundProgramAsync(program));
-        }
-    }
-
-    private async void Surround3dCheckBox_Click(object sender, RoutedEventArgs e) =>
-        await RunBooleanOperationAsync(value => _deviceManager.SetMainSurround3dAsync(value), Surround3dCheckBox);
-
-    private async void DirectCheckBox_Click(object sender, RoutedEventArgs e) =>
-        await RunBooleanOperationAsync(value => _deviceManager.SetMainDirectAsync(value), DirectCheckBox);
-
-    private async void PureDirectCheckBox_Click(object sender, RoutedEventArgs e) =>
-        await RunBooleanOperationAsync(value => _deviceManager.SetMainPureDirectAsync(value), PureDirectCheckBox);
-
-    private async void EnhancerCheckBox_Click(object sender, RoutedEventArgs e) =>
-        await RunBooleanOperationAsync(value => _deviceManager.SetMainEnhancerAsync(value), EnhancerCheckBox);
-
-    private async Task RunBooleanOperationAsync(
-        Func<bool, Task<DeviceSnapshot>> operation,
-        System.Windows.Controls.CheckBox control)
-    {
-        if (_updatingDailyControls)
-        {
-            return;
-        }
-
-        await RunUiOperationAsync(() => operation(control.IsChecked == true));
-        UpdateDailyControls(_deviceManager.Snapshot);
-    }
-
-    private async void SetToneButton_Click(object sender, RoutedEventArgs e) =>
-        await RunUiOperationAsync(() => _deviceManager.SetMainToneControlAsync(new ToneControlSettings(
-            ToneModeComboBox.SelectedItem as string,
-            ParseOptionalDecimal(BassTextBox.Text),
-            ParseOptionalDecimal(TrebleTextBox.Text))));
-
-    private async void SetEqualizerButton_Click(object sender, RoutedEventArgs e) =>
-        await RunUiOperationAsync(() => _deviceManager.SetMainEqualizerAsync(new EqualizerSettings(
-            EqualizerModeComboBox.SelectedItem as string,
-            ParseOptionalDecimal(EqualizerLowTextBox.Text),
-            ParseOptionalDecimal(EqualizerMidTextBox.Text),
-            ParseOptionalDecimal(EqualizerHighTextBox.Text))));
-
-    private async void SetBalanceButton_Click(object sender, RoutedEventArgs e) =>
-        await RunUiOperationAsync(() => _deviceManager.SetMainBalanceAsync(
-            ParseOptionalDecimal(BalanceTextBox.Text) ??
-            throw new ArgumentException("バランス値を入力してください。")));
-
-    private static decimal? ParseOptionalDecimal(string? text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return null;
-        }
-
-        if (decimal.TryParse(text, NumberStyles.Number, CultureInfo.CurrentCulture, out var current) ||
-            decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out current))
-        {
-            return current;
-        }
-
-        throw new ArgumentException("数値を入力してください。");
-    }
-
-    private static string FormatValue(decimal? value) =>
-        value?.ToString("0.###", CultureInfo.CurrentCulture) ?? string.Empty;
-
-    private decimal GetSnappedVolume()
-    {
-        var range = _deviceManager.Snapshot.Capabilities?.FindZoneRange("main", "volume")
-            ?? throw new CapabilityNotSupportedException("main.volume.range");
-        if (range.Minimum is not decimal minimum || range.Step is not decimal step || step <= 0)
-        {
-            throw new CapabilityNotSupportedException("main.volume.range");
-        }
-
-        var raw = (decimal)VolumeSlider.Value;
-        var steps = decimal.Round((raw - minimum) / step, 0, MidpointRounding.AwayFromZero);
-        return minimum + steps * step;
-    }
-
-    private async void MaybePromptForBroadPingScan(DeviceSnapshot snapshot)
-    {
-        var confirmation = snapshot.PingScanConfirmation;
-        if (!IsLoaded ||
-            snapshot.ErrorCode != "ping_scan_confirmation_required" ||
-            confirmation is null ||
-            _pingConfirmationPromptActive)
-        {
-            return;
-        }
-
-        var signature = $"{confirmation.BroadestPrefixLength}:{confirmation.HostCount}";
-        if (signature == _declinedPingConfirmationSignature)
-        {
-            return;
-        }
-
-        _pingConfirmationPromptActive = true;
-        try
-        {
-            var response = System.Windows.MessageBox.Show(
-                $"SSDPとプレフィックス/24以上の自動ping探索では対応アンプを検出できませんでした。\n\n" +
-                $"プレフィックス /{confirmation.BroadestPrefixLength} を含む広いサブネットへ、最大 {confirmation.HostCount:N0} ホストのping探索を実行しますか？\n\n" +
-                "応答ホストには読み取り専用のgetDeviceInfoを送信します。アンプ設定は変更しません。",
-                "広いサブネットのping探索",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Question);
-            if (response == MessageBoxResult.Yes)
-            {
-                _declinedPingConfirmationSignature = null;
-                await RunUiOperationAsync(() => _deviceManager.ApproveBroadSubnetPingScanAsync());
-            }
-            else
-            {
-                _declinedPingConfirmationSignature = signature;
-            }
-        }
-        finally
-        {
-            _pingConfirmationPromptActive = false;
-        }
-    }
-
-    public async Task ExecuteActivityAsync(string activityId) =>
-        await RunControlOperationAsync(() => _orchestrator.ActivateActivityAsync(activityId));
-
-    public async Task ToggleContextAsync(string contextId)
-    {
-        var context = _orchestrator.GetContexts().Single(item =>
-            string.Equals(item.Id, contextId, StringComparison.OrdinalIgnoreCase));
-        await RunControlOperationAsync(() => context.Active
-            ? _orchestrator.DeactivateContextAsync(contextId)
-            : _orchestrator.ActivateContextAsync(contextId));
-    }
-
-    private async Task ExecuteHotkeyActionAsync(string actionId)
-    {
-        if (string.Equals(actionId, HotkeyActionIds.PowerOn, StringComparison.OrdinalIgnoreCase))
-        {
-            await RunControlOperationAsync(() => _orchestrator.SetPowerAsync(MainPower.On, false));
-        }
-        else if (string.Equals(actionId, HotkeyActionIds.PowerStandby, StringComparison.OrdinalIgnoreCase))
-        {
-            await RunControlOperationAsync(() => _orchestrator.SetPowerAsync(MainPower.Standby, false));
-        }
-        else if (actionId.StartsWith("activity:", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteActivityAsync(actionId[9..]);
-        }
-        else if (actionId.StartsWith("blocker:", StringComparison.OrdinalIgnoreCase))
-        {
-            await ToggleContextAsync(actionId[8..]);
-        }
-        else if (actionId.StartsWith("action:", StringComparison.OrdinalIgnoreCase))
-        {
-            var result = await _registeredActions.ExecuteAsync(actionId[7..]);
-            if (!result.Succeeded)
-            {
-                System.Windows.MessageBox.Show(result.Message, "RX-V4A Manager", MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
-            }
-        }
-    }
-
-    private void GlobalHotkeys_RegistrationsChanged(
-        object? sender,
-        IReadOnlyList<GlobalHotkeyRegistration> registrations) => UpdateHotkeyStatus(registrations);
-
-    private void UpdateHotkeyStatus(IReadOnlyList<GlobalHotkeyRegistration> registrations)
-    {
-        var failures = registrations.Where(item => !item.Registered).ToArray();
-        HotkeyStatusText.Text = failures.Length == 0
-            ? $"グローバルホットキー: {registrations.Count}件を登録済み (MOD_NOREPEAT)"
-            : $"グローバルホットキー: {registrations.Count - failures.Length}件登録、競合 {failures.Length}件 ({string.Join(", ", failures.Select(item => item.Gesture))})";
-        HotkeyStatusText.Foreground = failures.Length == 0
-            ? System.Windows.Media.Brushes.DarkGreen
-            : System.Windows.Media.Brushes.DarkOrange;
-    }
-
-    private void OpenSettingsButton_Click(object sender, RoutedEventArgs e)
-    {
-        var window = new SettingsWindow(
-            _settings,
-            _settingsStore,
-            _globalHotkeys)
-        {
-            Owner = this
-        };
-        window.ShowDialog();
-        UpdateHotkeyStatus(_globalHotkeys.Registrations);
-    }
-
-    private void UpdateControlState()
-    {
-        var contexts = _orchestrator.GetContexts();
-        var active = contexts.Where(item => item.Active).Select(item => item.Id).ToArray();
-        var mismatch = contexts.Any(item => item.PowerMismatchWarning);
-        BlockerWarningText.Visibility = active.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
-        BlockerWarningText.Text = active.Length == 0
-            ? string.Empty
-            : mismatch
-                ? $"電源ON禁止中 ({string.Join(", ", active)}) ですが、アンプはONです。自動OFFは行いません。"
-                : $"電源ON禁止中: {string.Join(", ", active)}";
-    }
-
-    private async Task RunControlOperationAsync(Func<Task<ControlOperationResult>> operation)
-    {
-        try
-        {
-            var result = await operation();
-            UpdateControlState();
-            if (result.Outcome is ControlOutcome.Blocked or ControlOutcome.PartialFailure or ControlOutcome.Failed)
-            {
-                System.Windows.MessageBox.Show(
-                    result.Message + (result.ActiveBlockers.Count > 0
-                        ? $"\n有効なコンテキスト: {string.Join(", ", result.ActiveBlockers)}"
-                        : string.Empty),
-                    "RX-V4A Manager",
-                    MessageBoxButton.OK,
-                    result.Outcome == ControlOutcome.Blocked ? MessageBoxImage.Information : MessageBoxImage.Warning);
-            }
-        }
-        catch (Exception)
-        {
-            System.Windows.MessageBox.Show(
-                "操作を完了できませんでした。ログを確認してください。",
-                "RX-V4A Manager",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
-        }
-    }
-
-    private async Task RunUiOperationAsync(Func<Task> operation)
-    {
-        try
-        {
-            await operation();
-        }
-        catch (Exception exception)
-        {
-            System.Windows.MessageBox.Show(
-                exception switch
-                {
-                    DeviceUnavailableException => "対応アンプに接続されていません。",
-                    CapabilityNotSupportedException => "実機のCapabilityにこの操作がありません。",
-                    OperationCanceledException => "操作がタイムアウトしました。",
-                    ArgumentException => "接続先はIPアドレスまたはホスト名だけを指定してください。",
-                    _ => "操作を完了できませんでした。ログを確認してください。"
-                },
-                "RX-V4A Manager",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
-        }
-    }
-
-    private static string FormatVolume(MainZoneStatusResponse status)
-    {
-        if (status.ActualVolume?.Value is decimal actual)
-        {
-            return string.IsNullOrWhiteSpace(status.ActualVolume.Unit)
-                ? actual.ToString("0.###", CultureInfo.CurrentCulture)
-                : $"{actual.ToString("0.###", CultureInfo.CurrentCulture)} {status.ActualVolume.Unit}";
-        }
-
-        return status.Volume?.ToString("0.###", CultureInfo.CurrentCulture) ?? "—";
-    }
-
-    private sealed record DiscoveryInterfaceOption(string Label, string? Id);
 }
