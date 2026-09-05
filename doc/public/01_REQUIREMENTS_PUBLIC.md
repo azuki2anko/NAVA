@@ -1,4 +1,4 @@
-# Yamaha AV Manager 公開版要件定義書
+# Network AV Amp Controller 公開版要件定義書
 
 版: 2.1
 
@@ -44,9 +44,9 @@
 ### PUB-PR-01 Capability駆動
 
 - `getDeviceInfo`、`getFeatures`、`getAdvancedFeatures`、Zone状態を型付きで取得する。
-- モデル名の固定許可リストではなく、Main Zoneと広告されたCapabilityから互換性を判定する。
+- モデル名の固定許可リストではなく、Main Zoneと公開されたCapabilityから互換性を判定する。
 - 入力、機能、値域、SCENE数、Zone差を固定値にしない。
-- 実機が広告しない機能は呼び出さず、通常画面に表示しない。
+- 実機が対応機能として公開しない項目は呼び出さず、通常画面に表示しない。
 - 読み取り専用、操作可能、予約済み、サービス終了、実機非対応を区別する。
 - 実機識別子は内部照合だけに使い、GUI、共有ログ、外部APIではマスクする。
 
@@ -75,7 +75,7 @@
 - PUB-FR-104: `/24`以上の小さい範囲だけ自動ping探索する。
 - PUB-FR-105: `/16`～`/23`は候補数と読取内容を表示し、明示承認後だけping探索する。
 - PUB-FR-106: `/16`未満の広い範囲は総当たりせず、手動接続を案内する。
-- PUB-FR-107: Yamaha応答コード成功かつ、`getFeatures`にMain Zone、入力、基本操作のいずれかが広告された互換機器であることを検証する。
+- PUB-FR-107: Yamaha応答コード成功かつ、`getFeatures`にMain Zone、入力、基本操作のいずれかが公開された互換機器であることを検証する。
 - PUB-FR-108: IP変更後も内部機器IDで同一機器を照合する。
 - PUB-FR-109: 接続、切断、再接続、探索確認待ち、非対応を区別して表示する。
 - PUB-FR-110: 確認待ち中も保存済み／手動ホストへの読み取り専用再接続を継続する。
@@ -99,7 +99,7 @@
 - Zone: 電源、入力、音量、ミュート、音場、音声処理、信号情報、SCENE等
 - Tuner: 将来候補。利用場面とUIを再検討するまで実装を保留する。
 - Network/USB: 再生情報、再生制御、リスト、プリセット、検索、キュー
-- CD、Clock: 実機が広告する場合だけ型付きで提供
+- CD、Clock: 実機が対応項目として公開する場合だけ型付きで提供
 - MusicCast Link / Distribution: Advanced画面へ隔離し、誤操作を防止
 
 値は仕様書の固定値だけでなく、実機が返す選択肢と`range_step`で検証する。ネットワーク変更、MACフィルター、再起動、配信再構成は高影響操作とする。
@@ -152,7 +152,7 @@
 
 ### PUB-FR-800 設定・ログ・再接続
 
-- PUB-FR-801: 設定を`%LocalAppData%\Yamaha AV Manager\settings.json`へ保存する。
+- PUB-FR-801: 設定を`%LocalAppData%\Network AV Amp Controller\settings.json`へ保存する。
 - PUB-FR-802: 構造化JSON Linesログを日次管理する。
 - PUB-FR-803: IP、MAC、機器ID、トークン、個人識別子を共有ログへ出さない。
 - PUB-FR-804: 接続・要求タイムアウト、キャンセル、低頻度ポーリング、自動再接続を実装する。

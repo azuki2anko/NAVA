@@ -210,7 +210,7 @@ public sealed class YamahaClient : IYamahaClient
     {
         var requestUri = new Uri(_baseUri, $"YamahaExtendedControl/v1/{relativePath}");
         using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
-        request.Headers.TryAddWithoutValidation("X-AppName", "YamahaAVManager/1.0");
+        request.Headers.TryAddWithoutValidation("X-AppName", "NAVA/1.0");
         if (_eventPort is int port)
         {
             request.Headers.TryAddWithoutValidation("X-AppPort", port.ToString(System.Globalization.CultureInfo.InvariantCulture));

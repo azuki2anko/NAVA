@@ -1,6 +1,6 @@
 # コントリビューションガイド
 
-Yamaha AV ManagerへのIssue、文書改善、テスト、コード変更を歓迎します。
+Network AV Amp ControllerへのIssue、文書改善、テスト、コード変更を歓迎します。
 
 ## 開発環境
 
@@ -9,10 +9,10 @@ Yamaha AV ManagerへのIssue、文書改善、テスト、コード変更を歓�
 - Git
 
 ```powershell
-dotnet restore YamahaAv.Manager.sln
-dotnet build YamahaAv.Manager.sln -c Release --no-restore
-dotnet test YamahaAv.Manager.sln -c Release --no-build --no-restore
-dotnet format YamahaAv.Manager.sln --verify-no-changes --no-restore
+dotnet restore NetworkAVAmp.Controller.sln
+dotnet build NetworkAVAmp.Controller.sln -c Release --no-restore
+dotnet test NetworkAVAmp.Controller.sln -c Release --no-build --no-restore
+dotnet format NetworkAVAmp.Controller.sln --verify-no-changes --no-restore
 ```
 
 ## 設計原則

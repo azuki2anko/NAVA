@@ -1,6 +1,6 @@
 # localhost APIガイド
 
-Yamaha AV Managerは、PC内のほかのアプリから安全に利用するための型付きREST APIを提供します。
+Network AV Amp Controllerは、PC内のほかのアプリから安全に利用するための型付きREST APIを提供します。
 
 ## 基本情報
 
@@ -24,7 +24,7 @@ Invoke-RestMethod "$baseUri/health"
 |---|---|---|
 | GET | `/health` | アプリと機器接続の概要 |
 | GET | `/device` | 接続状態、モデル、APIバージョン |
-| GET | `/device/features` | 広告された機能、入力、音場、値域 |
+| GET | `/device/features` | 公開された対応機能、入力、音場、値域 |
 | GET | `/zones/main/status` | Main Zoneの現在状態 |
 | GET | `/activities` | 登録済みアクティビティ |
 | GET | `/activities/{id}/status` | アクティビティ状態 |
@@ -80,7 +80,7 @@ $body = @{ program = 'straight' } | ConvertTo-Json
 Invoke-RestMethod "$baseUri/zones/main/sound-program" -Method Put -ContentType 'application/json' -Body $body
 ```
 
-`program`は機器が広告した`SoundPrograms`だけを受け付けます。
+`program`は機器が対応項目として公開した`SoundPrograms`だけを受け付けます。
 
 ### 3D Surround、Direct、Pure Direct、Enhancer
 
@@ -141,7 +141,7 @@ Invoke-RestMethod "$baseUri/actions/example:execute" -Method Post
 | 403 | `force_not_authorized` | 公開APIで許可されない強制操作 |
 | 404 | `*_not_found` | 未登録の論理ID |
 | 409 | `blocked`相当 | Power-on blockerによる競合 |
-| 422 | `capability_not_supported` | 機器が機能を広告していない |
+| 422 | `capability_not_supported` | 機器が対応機能として公開していない |
 | 502 | `device_error` | Yamaha APIが操作を完了できない |
 | 503 | `device_unavailable` | 機器へ接続できない |
 | 504 | `timeout` | 操作がタイムアウトした |

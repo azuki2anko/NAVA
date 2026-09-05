@@ -1,4 +1,4 @@
-# Yamaha AV Manager 要件基準索引
+# Network AV Amp Controller 要件基準索引
 
 版: 2.0
 
@@ -6,7 +6,7 @@
 
 ## 1. 正式な要件基準
 
-Yamaha AV Managerの要件は、公開版とプライベート版で次のように構成する。
+Network AV Amp Controllerの要件は、公開版とプライベート版で次のように構成する。
 
 | エディション | 正式な要件 |
 |---|---|

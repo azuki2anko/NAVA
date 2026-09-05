@@ -1,9 +1,11 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Input;
+using RxV4A.Core;
 using RxV4A.Host;
 
 namespace RxV4A.Desktop;
@@ -13,16 +15,24 @@ public partial class HotkeySettingsWindow : Window
     private readonly AppSettings _settings;
     private readonly ISettingsStore _settingsStore;
     private readonly GlobalHotkeyService _globalHotkeys;
+    private readonly IDeviceManager _deviceManager;
+    private readonly IRegisteredActionService _registeredActions;
     private bool _capturing;
 
     public HotkeySettingsWindow(
         AppSettings settings,
         ISettingsStore settingsStore,
-        GlobalHotkeyService globalHotkeys)
+        GlobalHotkeyService globalHotkeys,
+        IDeviceManager deviceManager,
+        IRegisteredActionService registeredActions)
     {
         _settings = settings;
         _settingsStore = settingsStore;
         _globalHotkeys = globalHotkeys;
+        _deviceManager = deviceManager;
+        _registeredActions = registeredActions;
+        KeyOptions = BuildKeyOptions();
+        ActionOptions = BuildActionOptions();
         LoadRows();
         DataContext = this;
         InitializeComponent();
@@ -30,22 +40,72 @@ public partial class HotkeySettingsWindow : Window
 
     public ObservableCollection<GlobalHotkeyRow> GlobalHotkeys { get; } = [];
 
+    public IReadOnlyList<HotkeyKeyOption> KeyOptions { get; }
+
+    public IReadOnlyList<HotkeyActionOption> ActionOptions { get; }
+
     private void LoadRows()
     {
         lock (_settings.SyncRoot)
         {
             foreach (var binding in _settings.GlobalHotkeys)
             {
-                GlobalHotkeys.Add(new GlobalHotkeyRow
-                {
-                    FunctionKey = $"F{binding.Gesture.VirtualKey - 0x6F}",
-                    Ctrl = binding.Gesture.Ctrl,
-                    Alt = binding.Gesture.Alt,
-                    Shift = binding.Gesture.Shift,
-                    ActionId = binding.ActionId ?? string.Empty
-                });
+                GlobalHotkeys.Add(ToRow(binding));
             }
         }
+    }
+
+    private static GlobalHotkeyRow ToRow(GlobalHotkeyBinding binding) => new()
+    {
+        VirtualKey = binding.Gesture.VirtualKey,
+        Ctrl = binding.Gesture.Ctrl,
+        Alt = binding.Gesture.Alt,
+        Shift = binding.Gesture.Shift,
+        ActionId = binding.ActionId ?? string.Empty,
+        AmountText = binding.Amount?.ToString("0.###", CultureInfo.CurrentCulture) ?? string.Empty
+    };
+
+    private void AddHotkeyButton_Click(object sender, RoutedEventArgs e)
+    {
+        var usedKeys = GlobalHotkeys
+            .Where(item => item.Ctrl && item.Alt && !item.Shift)
+            .Select(item => item.VirtualKey)
+            .ToHashSet();
+        var virtualKey = KeyOptions.FirstOrDefault(option => !usedKeys.Contains(option.VirtualKey))?.VirtualKey
+                         ?? KeyOptions[0].VirtualKey;
+        var row = new GlobalHotkeyRow
+        {
+            VirtualKey = virtualKey,
+            Ctrl = true,
+            Alt = true
+        };
+        GlobalHotkeys.Add(row);
+        GlobalHotkeysGrid.SelectedItem = row;
+        GlobalHotkeysGrid.ScrollIntoView(row);
+        CaptureStatusText.Text = "ホットキー行を追加しました。キーとアクションを選択してください。";
+    }
+
+    private void RemoveHotkeyButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (GlobalHotkeysGrid.SelectedItem is not GlobalHotkeyRow row)
+        {
+            CaptureStatusText.Text = "削除する行を選択してください。";
+            return;
+        }
+
+        GlobalHotkeys.Remove(row);
+        CaptureStatusText.Text = "選択した行を削除しました。保存すると反映されます。";
+    }
+
+    private void ResetHotkeysButton_Click(object sender, RoutedEventArgs e)
+    {
+        GlobalHotkeys.Clear();
+        foreach (var binding in GlobalHotkeyDefaults.Create())
+        {
+            GlobalHotkeys.Add(ToRow(binding));
+        }
+
+        CaptureStatusText.Text = "既定の4件へ戻しました。保存すると反映されます。";
     }
 
     private async void SaveButton_Click(object sender, RoutedEventArgs e)
@@ -68,7 +128,7 @@ public partial class HotkeySettingsWindow : Window
             _globalHotkeys.Reload();
             System.Windows.MessageBox.Show(
                 "設定を保存し、グローバルホットキーを再登録しました。",
-                "Yamaha AV Manager",
+                "NAVA",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
         }
@@ -85,7 +145,7 @@ public partial class HotkeySettingsWindow : Window
 
             System.Windows.MessageBox.Show(
                 $"設定を保存できません。\n\n{exception.Message}",
-                "Yamaha AV Manager",
+                "NAVA",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
         }
@@ -105,7 +165,7 @@ public partial class HotkeySettingsWindow : Window
         _globalHotkeys.Suspend();
         Activate();
         Focus();
-        CaptureStatusText.Text = "F13～F24と修飾キーを押してください。Escで中止します。";
+        CaptureStatusText.Text = "対応する英数字、Fキー、移動キー、メディアキーを押してください。Escで中止します。";
     }
 
     private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
@@ -124,9 +184,9 @@ public partial class HotkeySettingsWindow : Window
         }
 
         var virtualKey = KeyInterop.VirtualKeyFromKey(key);
-        if (virtualKey is not (>= 0x7C and <= 0x87))
+        if (!HotkeyGesture.IsSupportedVirtualKey(virtualKey))
         {
-            CaptureStatusText.Text = "入力ホットキーの主キーはF13～F24だけです。";
+            CaptureStatusText.Text = "このキーはグローバルホットキーに使用できません。";
             return;
         }
 
@@ -140,7 +200,7 @@ public partial class HotkeySettingsWindow : Window
         };
         if (GlobalHotkeysGrid.SelectedItem is GlobalHotkeyRow hotkey)
         {
-            hotkey.FunctionKey = $"F{virtualKey - 0x6F}";
+            hotkey.VirtualKey = virtualKey;
             hotkey.Ctrl = gesture.Ctrl;
             hotkey.Alt = gesture.Alt;
             hotkey.Shift = gesture.Shift;
@@ -158,11 +218,23 @@ public partial class HotkeySettingsWindow : Window
 
     private static GlobalHotkeyBinding ToBinding(GlobalHotkeyRow row)
     {
-        if (!row.FunctionKey.StartsWith('F') ||
-            !int.TryParse(row.FunctionKey.AsSpan(1), out var number) ||
-            number is < 13 or > 24)
+        if (!HotkeyGesture.IsSupportedVirtualKey(row.VirtualKey))
         {
-            throw new InvalidDataException("グローバルホットキーの主キーはF13～F24で指定してください。");
+            throw new InvalidDataException("対応リストからホットキーを選択してください。");
+        }
+
+        var actionId = string.IsNullOrWhiteSpace(row.ActionId) ? null : row.ActionId.Trim();
+        decimal? amount = null;
+        if (HotkeyActionIds.RequiresAmount(actionId))
+        {
+            if ((!decimal.TryParse(row.AmountText, NumberStyles.Number, CultureInfo.CurrentCulture, out var parsed) &&
+                 !decimal.TryParse(row.AmountText, NumberStyles.Number, CultureInfo.InvariantCulture, out parsed)) ||
+                parsed is <= 0 or > 100)
+            {
+                throw new InvalidDataException("音量の増減量は0より大きく100以下の数値で指定してください。");
+            }
+
+            amount = parsed;
         }
 
         return new GlobalHotkeyBinding
@@ -172,10 +244,88 @@ public partial class HotkeySettingsWindow : Window
                 Ctrl = row.Ctrl,
                 Alt = row.Alt,
                 Shift = row.Shift,
-                VirtualKey = 0x6F + number
+                VirtualKey = row.VirtualKey
             },
-            ActionId = string.IsNullOrWhiteSpace(row.ActionId) ? null : row.ActionId.Trim()
+            ActionId = actionId,
+            Amount = amount
         };
+    }
+
+    private IReadOnlyList<HotkeyActionOption> BuildActionOptions()
+    {
+        var options = new List<HotkeyActionOption>();
+        var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        void Add(string id, string displayName)
+        {
+            if (known.Add(id))
+            {
+                options.Add(new HotkeyActionOption(id, displayName));
+            }
+        }
+
+        Add(string.Empty, "未割り当て");
+        Add(HotkeyActionIds.PowerToggle, "電源：ON／スタンバイ切り替え");
+        Add(HotkeyActionIds.PowerOn, "電源：ON");
+        Add(HotkeyActionIds.PowerStandby, "電源：スタンバイ");
+        Add(HotkeyActionIds.MuteToggle, "ミュート：切り替え");
+        Add(HotkeyActionIds.MuteOn, "ミュート：ON");
+        Add(HotkeyActionIds.MuteOff, "ミュート：OFF");
+        Add(HotkeyActionIds.VolumeUp, "音量：上げる");
+        Add(HotkeyActionIds.VolumeDown, "音量：下げる");
+
+        var zone = _deviceManager.Snapshot.Capabilities?.FindZone("main");
+        foreach (var input in zone?.Inputs.Where(item => ApplicationScope.IsOperationalInput(item.Id)) ?? [])
+        {
+            Add(HotkeyActionIds.SelectInput(input.Id), $"ソース：{input.Id}");
+        }
+
+        foreach (var program in zone?.SoundPrograms ?? [])
+        {
+            Add(HotkeyActionIds.SelectSoundProgram(program), $"音場：{program}");
+        }
+
+        lock (_settings.SyncRoot)
+        {
+            foreach (var activityId in _settings.Activities.Keys.OrderBy(item => item, StringComparer.OrdinalIgnoreCase))
+            {
+                Add(HotkeyActionIds.ActivateActivity(activityId), $"アクティビティ：{activityId}");
+            }
+
+            foreach (var blockerId in _settings.PowerOnBlockers.OrderBy(item => item, StringComparer.OrdinalIgnoreCase))
+            {
+                Add(HotkeyActionIds.ToggleBlocker(blockerId), $"電源ON禁止：{blockerId}を切り替え");
+            }
+        }
+
+        foreach (var action in _registeredActions.GetRegisteredActions())
+        {
+            Add(HotkeyActionIds.RegisteredAction(action.Id), $"登録アクション：{action.DisplayName}");
+        }
+
+        lock (_settings.SyncRoot)
+        {
+            foreach (var savedActionId in _settings.GlobalHotkeys.Select(item => item.ActionId)
+                         .Where(item => !string.IsNullOrWhiteSpace(item)))
+            {
+                Add(savedActionId!, $"保存済み：{savedActionId}");
+            }
+        }
+
+        return options;
+    }
+
+    private static IReadOnlyList<HotkeyKeyOption> BuildKeyOptions()
+    {
+        var virtualKeys = new List<int>();
+        virtualKeys.AddRange(Enumerable.Range(0x70, 24));
+        virtualKeys.AddRange(Enumerable.Range(0x41, 26));
+        virtualKeys.AddRange(Enumerable.Range(0x30, 10));
+        virtualKeys.AddRange(Enumerable.Range(0x60, 10));
+        virtualKeys.AddRange([0x6A, 0x6B, 0x6D, 0x6E, 0x6F]);
+        virtualKeys.AddRange([0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x2D, 0x2E]);
+        virtualKeys.AddRange(Enumerable.Range(0xAD, 7));
+        return virtualKeys.Select(key => new HotkeyKeyOption(key, HotkeyGesture.VirtualKeyName(key))).ToArray();
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
@@ -192,31 +342,59 @@ public partial class HotkeySettingsWindow : Window
 
 public sealed class GlobalHotkeyRow : ObservableRow
 {
-    private string _functionKey = "F13";
+    private int _virtualKey = 0x7C;
     private bool _ctrl;
     private bool _alt;
     private bool _shift;
     private string _actionId = string.Empty;
+    private string _amountText = string.Empty;
 
-    public string FunctionKey { get => _functionKey; set => Set(ref _functionKey, value); }
+    public int VirtualKey { get => _virtualKey; set => Set(ref _virtualKey, value); }
     public bool Ctrl { get => _ctrl; set => Set(ref _ctrl, value); }
     public bool Alt { get => _alt; set => Set(ref _alt, value); }
     public bool Shift { get => _shift; set => Set(ref _shift, value); }
-    public string ActionId { get => _actionId; set => Set(ref _actionId, value); }
+    public string ActionId
+    {
+        get => _actionId;
+        set
+        {
+            if (!Set(ref _actionId, value))
+            {
+                return;
+            }
+
+            if (RequiresAmount && string.IsNullOrWhiteSpace(AmountText))
+            {
+                AmountText = "1";
+            }
+
+            RaisePropertyChanged(nameof(RequiresAmount));
+        }
+    }
+    public string AmountText { get => _amountText; set => Set(ref _amountText, value); }
+    public bool RequiresAmount => HotkeyActionIds.RequiresAmount(ActionId);
 }
+
+public sealed record HotkeyKeyOption(int VirtualKey, string DisplayName);
+
+public sealed record HotkeyActionOption(string Id, string DisplayName);
 
 public abstract class ObservableRow : INotifyPropertyChanged
 {
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    protected void Set<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+    protected bool Set<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
     {
         if (EqualityComparer<T>.Default.Equals(field, value))
         {
-            return;
+            return false;
         }
 
         field = value;
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        RaisePropertyChanged(propertyName);
+        return true;
     }
+
+    protected void RaisePropertyChanged(string? propertyName) =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 }

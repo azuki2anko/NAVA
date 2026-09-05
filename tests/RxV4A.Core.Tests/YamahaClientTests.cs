@@ -119,7 +119,7 @@ public sealed class YamahaClientTests
 
         Assert.NotNull(captured);
         Assert.EndsWith($"/YamahaExtendedControl/v1/main/setPower?{expectedQuery}", captured.RequestUri!.AbsoluteUri);
-        Assert.Equal("YamahaAVManager/1.0", captured.Headers.GetValues("X-AppName").Single());
+        Assert.Equal("NAVA/1.0", captured.Headers.GetValues("X-AppName").Single());
         Assert.Equal("55275", captured.Headers.GetValues("X-AppPort").Single());
     }
 

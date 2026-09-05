@@ -2,7 +2,7 @@
 
 所有者: `azuki2anko`
 
-推奨リポジトリ名: `yamaha-av-manager`
+リポジトリ名: `NAVA`
 
 ライセンス: MIT / Copyright (c) 2026 anko
 
@@ -20,17 +20,17 @@
 ## 2. ローカル検証
 
 ```powershell
-dotnet restore YamahaAv.Manager.sln
-dotnet build YamahaAv.Manager.sln -c Release --no-restore
-dotnet test YamahaAv.Manager.sln -c Release --no-build --no-restore
-dotnet format YamahaAv.Manager.sln --verify-no-changes --no-restore
-dotnet publish src/RxV4A.Desktop/RxV4A.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o artifacts/publish
+dotnet restore NetworkAVAmp.Controller.sln
+dotnet build NetworkAVAmp.Controller.sln -c Release --no-restore
+dotnet test NetworkAVAmp.Controller.sln -c Release --no-build --no-restore
+dotnet format NetworkAVAmp.Controller.sln --verify-no-changes --no-restore
+.\build\Build-Distributions.ps1
 ```
 
 - [ ] Release buildが警告・エラーなしで成功した
 - [ ] 全テストが成功した
 - [ ] format検証が成功した
-- [ ] self-contained win-x64 publishが成功した
+- [ ] self-contained win-x64 Portable ZIPとインストーラーの作成が成功した
 - [ ] 新しいWindowsユーザープロファイル相当で初回起動を確認した
 - [ ] 起動時の探索が読み取り専用であることを確認した
 - [ ] RX-V4Aで状態取得を確認した
@@ -68,7 +68,7 @@ dotnet publish src/RxV4A.Desktop/RxV4A.Desktop.csproj -c Release -r win-x64 --se
 
 - [ ] `CHANGELOG.md`の「未公開」を実際の日付へ変更した
 - [ ] `v0.1.0`タグを検証済みコミットへ付けた
-- [ ] publish出力をZIP化した
+- [ ] `artifacts/distribution`にPortable ZIP、インストーラー、SHA256一覧が作成された
 - [ ] ZIP内に実設定、ログ、デバッグシンボル、秘密情報がない
 - [ ] Release Notesへ対応範囲、RX-V4Aのみ実機確認、未署名バイナリであることを記載した
 - [ ] ZIPをGitHub Releaseへ添付した

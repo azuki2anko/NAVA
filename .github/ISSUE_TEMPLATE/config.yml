@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
   - name: セキュリティ上の問題
-    url: https://github.com/azuki2anko/yamaha-av-manager/security/advisories/new
+    url: https://github.com/azuki2anko/NAVA/security/advisories/new
     about: 秘密情報をIssueへ投稿せず、非公開で報告してください。

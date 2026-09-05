@@ -1,7 +1,7 @@
 <Window x:Class="RxV4A.Desktop.CompactPowerWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="RX-V4A 電源"
+        Title="NAVA — 電源"
         Width="120" Height="38"
         MinWidth="64" MinHeight="24"
         MaxWidth="480" MaxHeight="180"
@@ -11,7 +11,7 @@
         ShowInTaskbar="False"
         ShowActivated="False"
         Topmost="True"
-        Icon="Assets/YamahaAvManager.ico"
+        Icon="Assets/NAVA.ico"
         Background="Transparent"
         Closing="Window_Closing"
         Loaded="Window_Loaded">

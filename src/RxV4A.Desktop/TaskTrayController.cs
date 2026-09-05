@@ -35,7 +35,7 @@ public sealed class TaskTrayController : IDisposable
         menu.Items.Add(_statusItem);
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("ミニ電源操作", null, (_, _) => _compactPowerWindow.ShowFromTray());
-        menu.Items.Add("操作画面を開く", null, (_, _) => _mainWindow.ShowFromTray());
+        menu.Items.Add("操作画面を開く", null, (_, _) => ShowMainWindow());
         menu.Items.Add("設定画面を開く", null, (_, _) => _settingsWindow.ShowFromTray());
         menu.Items.Add("状態を更新", null, async (_, _) => await RefreshAsync());
         menu.Items.Add(new Forms.ToolStripSeparator());
@@ -50,11 +50,17 @@ public sealed class TaskTrayController : IDisposable
         _notifyIcon = new Forms.NotifyIcon
         {
             Icon = _applicationIcon ?? SystemIcons.Application,
-            Text = "Yamaha AV Manager - 未接続",
+            Text = "NAVA - 未接続",
             ContextMenuStrip = menu,
             Visible = true
         };
-        _notifyIcon.DoubleClick += (_, _) => _mainWindow.ShowFromTray();
+        _notifyIcon.MouseDoubleClick += (_, eventArgs) =>
+        {
+            if (eventArgs.Button == Forms.MouseButtons.Left)
+            {
+                ShowMainWindow();
+            }
+        };
         _deviceManager.SnapshotChanged += DeviceManager_SnapshotChanged;
         _orchestrator.StateChanged += Orchestrator_StateChanged;
         Update(_deviceManager.Snapshot);
@@ -78,6 +84,18 @@ public sealed class TaskTrayController : IDisposable
         catch
         {
             // The shared snapshot and structured log expose the failure state.
+        }
+    }
+
+    private void ShowMainWindow()
+    {
+        if (_mainWindow.Dispatcher.CheckAccess())
+        {
+            _mainWindow.ShowFromTray();
+        }
+        else
+        {
+            _mainWindow.Dispatcher.BeginInvoke(_mainWindow.ShowFromTray);
         }
     }
 
@@ -117,6 +135,6 @@ public sealed class TaskTrayController : IDisposable
             ? $"状態: {state}"
             : $"状態: {state} / ブロック: {string.Join(",", blockers)}";
         var suffix = blockers.Length == 0 ? state : mismatch ? "禁止中・外部ON" : "電源ON禁止中";
-        _notifyIcon.Text = $"Yamaha AV Manager - {suffix}";
+        _notifyIcon.Text = $"NAVA - {suffix}";
     }
 }

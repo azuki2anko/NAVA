@@ -29,13 +29,13 @@ RxV4A.Host
 RxV4A.Core
 ```
 
-`YamahaAv.Manager.sln`は公開3プロジェクトと公開テスト2プロジェクトだけを含む。private版は公開リポジトリをupstreamとして取り込み、必要な実装を`IRegisteredAction`として追加する。公開版からprivateプロジェクトへの参照は作らない。
+`NetworkAVAmp.Controller.sln`は公開3プロジェクトと公開テスト2プロジェクトだけを含む。private版は公開リポジトリをupstreamとして取り込み、必要な実装を`IRegisteredAction`として追加する。公開版からprivateプロジェクトへの参照は作らない。
 
 ## マイルストーン
 
 1. 公開境界の確立: 固定プロファイルと外部アプリ固有コードを除去し、登録済みアクション契約へ置換する。
 2. 汎用設定UI: アクティビティ、blocker、アクション割り当てを固定名なしで編集できる画面を追加する。
-3. Yamaha公開APIの段階的拡張: Main Zone基本操作から、Capabilityが広告する領域へ型付きで広げる。
+3. Yamaha公開APIの段階的拡張: Main Zone基本操作から、Capabilityが対応項目として公開する領域へ型付きで広げる。
 4. LAN公開の任意機能: 読み取り用／操作用トークン、CORS、Firewall案内を要件どおり実装する。
 5. 配布監査: self-contained win-x64 publish、契約テスト、公開情報監査、README同期を完了する。
 

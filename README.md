@@ -1,4 +1,6 @@
-# Yamaha AV Manager
+# NAVA
+
+Network AV Amp Controller
 
 Windows 11からYamaha Extended Control対応アンプを操作する、Capability駆動のタスクトレイ常駐アプリです。リモコンの完全再現ではなく、PC用アンプとして使うMain Zoneの日常操作へ重点を置いています。
 
@@ -14,12 +16,13 @@ Windows 11からYamaha Extended Control対応アンプを操作する、Capabili
 - トーン、EQ、左右バランス
 - SSDP、Windows近隣キャッシュ、確認付きping探索、手動接続
 - シンプルなWPF画面、タスクトレイ、最前面ミニ電源トグル
-- Ctrl／Alt／Shift + F13～F24のグローバルホットキー
+- タスクトレイ収納とWindowsサインイン時の自動起動設定
+- 選択式のグローバルホットキー
 - `127.0.0.1`限定の型付きREST APIとOpenAPI
 - 汎用アクティビティ、Power-on blocker、登録済みアクション拡張契約
 - JSON設定、構造化ログ、タイムアウト、ポーリング、自動再接続
 
-機能、入力、音場、値域は`getFeatures`から取得します。機器が広告しない操作は画面へ表示せず、API要求も拒否します。Tuner／ラジオ機能は現在保留中です。
+機能、入力、音場、値域は`getFeatures`から取得します。機器が対応機能として公開しない操作は画面へ表示せず、API要求も拒否します。Tuner／ラジオ機能は現在保留中です。
 
 ## 必要な環境
 
@@ -31,12 +34,12 @@ Windows 11からYamaha Extended Control対応アンプを操作する、Capabili
 
 ## 使い始める
 
-GitHub Releasesの`win-x64`配布ZIPを展開し、`YamahaAV.Manager.exe`を起動します。アプリはタスクトレイへ常駐し、読み取り専用の機器探索を開始します。詳しい初回接続、画面操作、ミニ画面、ホットキー、トラブル対処は[利用説明書](doc/USER_GUIDE.md)を参照してください。
+Portable版のZIPを展開して`NAVA.exe`を起動するか、インストーラー版のセットアップを実行します。アプリはタスクトレイへ常駐し、読み取り専用の機器探索を開始します。詳しい導入、初回接続、画面操作、ミニ画面、ホットキー、トラブル対処は[利用説明書](doc/USER_GUIDE.md)を参照してください。
 
 ソースから起動する場合:
 
 ```powershell
-dotnet restore YamahaAv.Manager.sln
+dotnet restore NetworkAVAmp.Controller.sln
 dotnet run --project src/RxV4A.Desktop/RxV4A.Desktop.csproj -c Debug
 ```
 
@@ -61,18 +64,24 @@ APIは状態と目的を限定した型付き操作だけを提供します。�
 ## ビルドと検証
 
 ```powershell
-dotnet restore YamahaAv.Manager.sln
-dotnet build YamahaAv.Manager.sln -c Release --no-restore
-dotnet test YamahaAv.Manager.sln -c Release --no-build --no-restore
-dotnet format YamahaAv.Manager.sln --verify-no-changes --no-restore
+dotnet restore NetworkAVAmp.Controller.sln
+dotnet build NetworkAVAmp.Controller.sln -c Release --no-restore
+dotnet test NetworkAVAmp.Controller.sln -c Release --no-build --no-restore
+dotnet format NetworkAVAmp.Controller.sln --verify-no-changes --no-restore
 dotnet publish src/RxV4A.Desktop/RxV4A.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o artifacts/publish
+```
+
+Portable ZIPとインストーラーをまとめて作成する場合は、Inno Setup 6を用意して次を実行します。
+
+```powershell
+.\build\Build-Distributions.ps1
 ```
 
 GitHub Actionsでも同じRelease build、test、format、self-contained publishを検証します。
 
 ## プライバシーと安全性
 
-実行時設定とログは`%LocalAppData%\Yamaha AV Manager`へ保存します。設定ファイルや無加工ログをIssueへ添付しないでください。IPアドレス、MACアドレス、機器ID、トークン、鍵、個人パスを公開しないでください。
+実行時設定とログは`%LocalAppData%\NAVA`へ保存します。設定ファイルや無加工ログをIssueへ添付しないでください。IPアドレス、MACアドレス、機器ID、トークン、鍵、個人パスを公開しないでください。
 
 公開版は外部入力から任意URL、任意コマンド、任意キー列、任意Yamaha APIを実行しません。実機の最初の確認は読み取り専用から始めてください。詳細は[セキュリティポリシー](SECURITY.md)を参照してください。
 

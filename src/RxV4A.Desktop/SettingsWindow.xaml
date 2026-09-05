@@ -4,8 +4,8 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="Yamaha AV Manager - 設定" Height="820" Width="780"
-        Icon="Assets/YamahaAvManager.ico"
+        Title="NAVA — 設定" Height="820" Width="780"
+        Icon="Assets/NAVA.ico"
         MinHeight="640" MinWidth="680"
         WindowStartupLocation="CenterScreen"
         Closing="Window_Closing"
@@ -14,8 +14,8 @@
         <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="24">
         <StackPanel>
-            <TextBlock Text="設定" FontSize="28" FontWeight="SemiBold" />
-            <TextBlock Text="接続先・詳細機能・プログラマブルキーボード" Foreground="Gray" Margin="0,4,0,0" />
+            <TextBlock Text="NAVA 設定" FontSize="28" FontWeight="SemiBold" />
+            <TextBlock Text="Network AV Amp Controller  •  接続先・詳細機能・プログラマブルキーボード" Foreground="Gray" Margin="0,4,0,0" />
         </StackPanel>
 
         <Border BorderBrush="#D0D0D0" BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,16,0,0">
@@ -61,6 +61,8 @@
                 CornerRadius="8" Padding="16" Margin="0,16,0,0">
             <StackPanel>
                 <TextBlock Text="日常操作" FontSize="18" FontWeight="SemiBold" />
+                <TextBlock x:Name="OperationStatusText" Visibility="Collapsed" Foreground="#00897B"
+                           FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" />
 
                 <Grid x:Name="InputPanel" Margin="0,12,0,0">
                     <Grid.ColumnDefinitions>
@@ -175,7 +177,7 @@
                 </Grid>
 
                 <TextBlock x:Name="CapabilityNoteText" Foreground="Gray" Margin="0,12,0,0"
-                           Text="接続機器が公式APIで広告した操作だけを表示します。" TextWrapping="Wrap" />
+                           Text="接続機器の公式APIから取得した対応機能だけを表示します。" TextWrapping="Wrap" />
             </StackPanel>
         </Border>
 
@@ -199,11 +201,25 @@
                     <TextBox x:Name="ManualHostTextBox" Height="30" VerticalContentAlignment="Center" />
                 </DockPanel>
                 <Separator Margin="0,16,0,12" />
+                <TextBlock Text="アプリ動作" FontSize="16" FontWeight="SemiBold" />
+                <CheckBox x:Name="MinimizeToTrayCheckBox"
+                          Content="最小化時、タスクトレイに収納する"
+                          Margin="0,9,0,0"
+                          Click="MinimizeToTrayCheckBox_Click" />
+                <TextBlock x:Name="MinimizeBehaviorStatusText"
+                           Foreground="Gray" Margin="22,4,0,0" TextWrapping="Wrap" />
+                <CheckBox x:Name="StartWithWindowsCheckBox"
+                          Content="Windows起動時に実行させる"
+                          Margin="0,12,0,0"
+                          Click="StartWithWindowsCheckBox_Click" />
+                <TextBlock x:Name="StartWithWindowsStatusText"
+                           Foreground="Gray" Margin="22,4,0,0" TextWrapping="Wrap" />
+                <Separator Margin="0,16,0,12" />
                 <TextBlock Text="プログラマブルキーボード" FontSize="16" FontWeight="SemiBold" />
                 <TextBlock x:Name="HotkeyStatusText"
                            Text="グローバルホットキーを準備しています…"
                            Foreground="Gray" Margin="0,4,0,0" TextWrapping="Wrap" />
-                <TextBlock Text="既定: Ctrl+Alt+F13=ON、Ctrl+Alt+F14=Standby。F15～F24は未割り当てです。"
+                <TextBlock Text="既定: Ctrl+Alt+F13=電源切替、F14=ミュート切替、F15=音量－、F16=音量＋。"
                            Foreground="Gray" Margin="0,4,0,0" TextWrapping="Wrap" />
                 <Button Content="詳細設定…" Width="110" Height="32" HorizontalAlignment="Right"
                         Margin="0,10,0,0" Click="OpenSettingsButton_Click" />

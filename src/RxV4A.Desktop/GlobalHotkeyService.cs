@@ -16,13 +16,13 @@ public sealed class GlobalHotkeyService : IDisposable
     private const int FirstRegistrationId = 0x5100;
 
     private readonly AppSettings _settings;
-    private readonly Func<string, Task> _executeAction;
-    private readonly Dictionary<int, string> _actions = [];
+    private readonly Func<GlobalHotkeyBinding, Task> _executeAction;
+    private readonly Dictionary<int, GlobalHotkeyBinding> _actions = [];
     private HwndSource? _source;
     private nint _windowHandle;
     private bool _disposed;
 
-    public GlobalHotkeyService(AppSettings settings, Func<string, Task> executeAction)
+    public GlobalHotkeyService(AppSettings settings, Func<GlobalHotkeyBinding, Task> executeAction)
     {
         _settings = settings;
         _executeAction = executeAction;
@@ -78,7 +78,7 @@ public sealed class GlobalHotkeyService : IDisposable
                 (uint)binding.Gesture.VirtualKey);
             if (registered)
             {
-                _actions[id] = binding.ActionId!;
+                _actions[id] = binding;
             }
 
             results.Add(new GlobalHotkeyRegistration(
@@ -116,10 +116,10 @@ public sealed class GlobalHotkeyService : IDisposable
 
     private nint WindowProcedure(nint hwnd, int message, nint wParam, nint lParam, ref bool handled)
     {
-        if (message == WmHotkey && _actions.TryGetValue(wParam.ToInt32(), out var actionId))
+        if (message == WmHotkey && _actions.TryGetValue(wParam.ToInt32(), out var binding))
         {
             handled = true;
-            _ = _executeAction(actionId);
+            _ = _executeAction(binding);
         }
 
         return 0;
@@ -146,6 +146,7 @@ public sealed class GlobalHotkeyService : IDisposable
     private static GlobalHotkeyBinding Clone(GlobalHotkeyBinding source) => new()
     {
         ActionId = source.ActionId,
+        Amount = source.Amount,
         Gesture = new HotkeyGesture
         {
             Ctrl = source.Gesture.Ctrl,

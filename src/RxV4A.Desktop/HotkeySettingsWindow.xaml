@@ -1,8 +1,9 @@
 <Window x:Class="RxV4A.Desktop.HotkeySettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Yamaha AV Manager 詳細設定" Height="620" Width="820"
-        MinHeight="520" MinWidth="700" WindowStartupLocation="CenterOwner"
+        Title="NAVA — ホットキー設定" Height="620" Width="940"
+        Icon="Assets/NAVA.ico"
+        MinHeight="520" MinWidth="820" WindowStartupLocation="CenterOwner"
         PreviewKeyDown="Window_PreviewKeyDown" Closing="Window_Closing">
     <DockPanel Margin="16">
         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
@@ -11,23 +12,53 @@
         </StackPanel>
         <DockPanel>
             <StackPanel DockPanel.Dock="Top">
-                <TextBlock Text="Ctrl / Alt / Shift と F13～F24だけをRegisterHotKeyで登録します。Windowsキーは使用しません。"
+                <TextBlock Text="キーとアクションをリストから選択します。Ctrl / Alt / Shiftは任意で組み合わせられます。"
                            TextWrapping="Wrap" />
-                <TextBlock Text="Action ID: power-on、power-standby、activity:&lt;登録ID&gt;、blocker:&lt;登録ID&gt;、action:&lt;登録ID&gt;"
+                <TextBlock Text="音量アップ／ダウンを選んだ行では、1回押したときの増減量を指定してください。"
                            Foreground="Gray" Margin="0,4,0,8" TextWrapping="Wrap" />
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                    <Button Content="選択行へキーを押して登録" Padding="12,5" Click="CaptureGlobalButton_Click" />
+                    <Button Content="＋ 追加" Padding="12,5" Margin="0,0,6,0" Click="AddHotkeyButton_Click" />
+                    <Button Content="－ 選択行を削除" Padding="12,5" Margin="0,0,6,0" Click="RemoveHotkeyButton_Click" />
+                    <Button Content="既定に戻す" Padding="12,5" Margin="0,0,12,0" Click="ResetHotkeysButton_Click" />
+                    <Button Content="押したキーを選択行へ設定" Padding="12,5" Click="CaptureGlobalButton_Click" />
                     <TextBlock x:Name="CaptureStatusText" Margin="12,6,0,0" Foreground="DarkOrange" />
                 </StackPanel>
             </StackPanel>
             <DataGrid x:Name="GlobalHotkeysGrid" AutoGenerateColumns="False" CanUserAddRows="False"
                       SelectionMode="Single" ItemsSource="{Binding GlobalHotkeys}">
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="キー" Binding="{Binding FunctionKey}" Width="90" />
+                    <DataGridTemplateColumn Header="キー" Width="165">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <ComboBox ItemsSource="{Binding DataContext.KeyOptions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                          DisplayMemberPath="DisplayName" SelectedValuePath="VirtualKey"
+                                          SelectedValue="{Binding VirtualKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                          MinWidth="140" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
                     <DataGridCheckBoxColumn Header="Ctrl" Binding="{Binding Ctrl}" Width="60" />
                     <DataGridCheckBoxColumn Header="Alt" Binding="{Binding Alt}" Width="60" />
                     <DataGridCheckBoxColumn Header="Shift" Binding="{Binding Shift}" Width="60" />
-                    <DataGridTextColumn Header="Action ID（空欄=未割り当て）" Binding="{Binding ActionId}" Width="*" />
+                    <DataGridTemplateColumn Header="アクション" Width="*">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <ComboBox ItemsSource="{Binding DataContext.ActionOptions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                          DisplayMemberPath="DisplayName" SelectedValuePath="Id"
+                                          SelectedValue="{Binding ActionId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                          MinWidth="250" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTemplateColumn Header="増減量" Width="100">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBox Text="{Binding AmountText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                         IsEnabled="{Binding RequiresAmount}" HorizontalContentAlignment="Right"
+                                         ToolTip="音量アップ／ダウン時の1回あたりの増減量" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
                 </DataGrid.Columns>
             </DataGrid>
         </DockPanel>

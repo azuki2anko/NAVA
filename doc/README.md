@@ -1,4 +1,4 @@
-# Yamaha AV Manager 文書索引
+# Network AV Amp Controller 文書索引
 
 更新日: 2026-09-03
 

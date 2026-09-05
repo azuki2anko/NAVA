@@ -47,15 +47,20 @@ public static class SettingsValidator
         var assigned = settings.GlobalHotkeys.Where(item => !string.IsNullOrWhiteSpace(item.ActionId)).ToArray();
         foreach (var binding in assigned)
         {
-            if (binding.Gesture.VirtualKey is < 0x7C or > 0x87)
+            if (!HotkeyGesture.IsSupportedVirtualKey(binding.Gesture.VirtualKey))
             {
-                throw new InvalidDataException("Global hotkeys are limited to F13 through F24.");
+                throw new InvalidDataException("Unsupported global hotkey key.");
             }
 
             var actionId = binding.ActionId!;
             if (!IsKnownHotkeyAction(actionId, settings))
             {
                 throw new InvalidDataException($"Unknown hotkey action '{actionId}'.");
+            }
+
+            if (HotkeyActionIds.RequiresAmount(actionId) && binding.Amount is not (> 0 and <= 100))
+            {
+                throw new InvalidDataException("Volume hotkey amount must be greater than 0 and at most 100.");
             }
         }
 
@@ -79,14 +84,22 @@ public static class SettingsValidator
     private static bool IsKnownHotkeyAction(string actionId, AppSettings settings)
     {
         if (string.Equals(actionId, HotkeyActionIds.PowerOn, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(actionId, HotkeyActionIds.PowerStandby, StringComparison.OrdinalIgnoreCase))
+            string.Equals(actionId, HotkeyActionIds.PowerStandby, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(actionId, HotkeyActionIds.PowerToggle, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(actionId, HotkeyActionIds.MuteOn, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(actionId, HotkeyActionIds.MuteOff, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(actionId, HotkeyActionIds.MuteToggle, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(actionId, HotkeyActionIds.VolumeUp, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(actionId, HotkeyActionIds.VolumeDown, StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
 
         return HasRegisteredSuffix(actionId, "activity:", settings.Activities.Keys) ||
                HasRegisteredSuffix(actionId, "blocker:", settings.PowerOnBlockers) ||
-               HasValidActionSuffix(actionId);
+               HasValidActionSuffix(actionId) ||
+               HasValidDeviceValueSuffix(actionId, "input:") ||
+               HasValidDeviceValueSuffix(actionId, "sound-program:");
     }
 
     private static bool HasRegisteredSuffix(string value, string prefix, IEnumerable<string> registered) =>
@@ -111,4 +124,10 @@ public static class SettingsValidator
             return false;
         }
     }
+
+    private static bool HasValidDeviceValueSuffix(string value, string prefix) =>
+        value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
+        value.Length > prefix.Length &&
+        value.Length <= prefix.Length + 128 &&
+        !value[prefix.Length..].Any(char.IsControl);
 }

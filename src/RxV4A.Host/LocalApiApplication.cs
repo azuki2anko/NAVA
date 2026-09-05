@@ -42,7 +42,7 @@ public static class LocalApiApplication
         builder.Logging.AddProvider(new JsonFileLoggerProvider(
             Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Yamaha AV Manager",
+                "NAVA",
                 "logs")));
 
         builder.Services.AddSingleton(settings);

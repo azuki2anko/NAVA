@@ -22,6 +22,7 @@ public partial class App : System.Windows.Application
         {
             _host = await LocalApiApplication.BuildAsync(e.Args);
             await _host.StartAsync();
+            TryClearStartupError();
 
             var manager = _host.Services.GetRequiredService<IDeviceManager>();
             var orchestrator = _host.Services.GetRequiredService<IControlOrchestrator>();
@@ -55,8 +56,8 @@ public partial class App : System.Windows.Application
         {
             TryWriteStartupError(exception);
             System.Windows.MessageBox.Show(
-                $"Yamaha AV Managerを開始できませんでした。\n\n{exception.Message}",
-                "Yamaha AV Manager",
+                $"NAVAを開始できませんでした。\n\n{exception.Message}",
+                "NAVA",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             Shutdown(1);
@@ -95,13 +96,9 @@ public partial class App : System.Windows.Application
     {
         try
         {
-            var directory = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Yamaha AV Manager",
-                "logs");
-            Directory.CreateDirectory(directory);
+            Directory.CreateDirectory(Path.GetDirectoryName(StartupErrorPath)!);
             File.WriteAllText(
-                Path.Combine(directory, "startup-error.log"),
+                StartupErrorPath,
                 $"{DateTimeOffset.Now:O}{Environment.NewLine}{exception}");
         }
         catch
@@ -109,4 +106,22 @@ public partial class App : System.Windows.Application
             // 起動エラーの表示を、診断ログの書き込み失敗で妨げない。
         }
     }
+
+    private static void TryClearStartupError()
+    {
+        try
+        {
+            File.Delete(StartupErrorPath);
+        }
+        catch
+        {
+            // 正常起動は、古い診断ログを削除できなくても続行する。
+        }
+    }
+
+    private static string StartupErrorPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "NAVA",
+        "logs",
+        "startup-error.log");
 }

@@ -22,7 +22,7 @@
 ## プライベート版だけに含めるもの
 
 - 実IPアドレス、MACアドレス、機器ID、読み取り／操作トークン
-- `%LocalAppData%\Yamaha AV Manager`以下の設定とログ
+- `%LocalAppData%\Network AV Amp Controller`以下の設定とログ
 - 個人用の入力名、MacroButton番号、ホットキー割り当て、活動プロファイル
 - `tv-recording`、`spotify`、`call`、`vrchat`の既定プロファイル
 - Voicemeeter Remote API、互換ホットキー、Virtual Desktop Monitor例外
@@ -40,16 +40,16 @@
 非公開リポジトリ側の例:
 
 ```powershell
-git remote add upstream https://github.com/<owner>/yamaha-av-manager.git
+git remote add upstream https://github.com/<owner>/NAVA.git
 git fetch upstream
 git merge upstream/main
 ```
 
 ## 公開前チェック
 
-- `dotnet build YamahaAv.Manager.sln -c Release`
-- `dotnet test YamahaAv.Manager.sln -c Release`
-- `dotnet format YamahaAv.Manager.sln --verify-no-changes`
+- `dotnet build NetworkAVAmp.Controller.sln -c Release`
+- `dotnet test NetworkAVAmp.Controller.sln -c Release`
+- `dotnet format NetworkAVAmp.Controller.sln --verify-no-changes`
 - `bin/`、`obj/`、`artifacts/`、設定、ログ、private overlayが追跡対象にないこと
 - 実IP、MAC、機器ID、トークン、鍵、個人パスが差分とGit履歴にないこと
 - READMEと実装状況が一致していること

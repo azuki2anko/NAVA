@@ -4,9 +4,9 @@
 
 ## 確認項目
 
-- [ ] `dotnet build YamahaAv.Manager.sln -c Release`が成功する
-- [ ] `dotnet test YamahaAv.Manager.sln -c Release`が成功する
-- [ ] `dotnet format YamahaAv.Manager.sln --verify-no-changes`が成功する
+- [ ] `dotnet build NetworkAVAmp.Controller.sln -c Release`が成功する
+- [ ] `dotnet test NetworkAVAmp.Controller.sln -c Release`が成功する
+- [ ] `dotnet format NetworkAVAmp.Controller.sln --verify-no-changes`が成功する
 - [ ] `getFeatures`にない操作や値を送信しない
 - [ ] 実IP、MACアドレス、機器ID、トークン、個人パスを含めていない
 - [ ] `.private/`または`private/`を参照していない
