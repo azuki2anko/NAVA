@@ -2,6 +2,12 @@
 
 Network AV Amp Controller
 
+YAMAHAの「[AV CONTROLLER](https://jp.yamaha.com/products/audio_visual/apps/av_controller/index.html)」アプリのバージョンアップが終了したため、パソコンから対応アンプを操作できるアプリとしてNAVAを作りました。
+
+**[Windows 11 x64用インストーラーをダウンロード](https://github.com/azuki2anko/NAVA/releases/download/v0.1.0/NAVA-0.1.0-win-x64-setup.exe)**
+
+インストールせずに使う場合は、[Portable版ZIP](https://github.com/azuki2anko/NAVA/releases/download/v0.1.0/NAVA-0.1.0-win-x64-portable.zip)を利用できます。
+
 Windows 11からYamaha Extended Control対応アンプを操作する、Capability駆動のタスクトレイ常駐アプリです。リモコンの完全再現ではなく、PC用アンプとして使うMain Zoneの日常操作へ重点を置いています。
 
 > [!IMPORTANT]
