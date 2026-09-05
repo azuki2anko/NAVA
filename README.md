@@ -2,7 +2,7 @@
 
 Network AV Amp Controller
 
-YAMAHAの「[AV CONTROLLER](https://jp.yamaha.com/products/audio_visual/apps/av_controller/index.html)」アプリのバージョンアップが終了したため、パソコンから対応アンプを操作できるアプリとしてNAVAを作りました。
+YAMAHAの「[AV CONTROLLER](https://jp.yamaha.com/products/audio_visual/apps/av_controller/index.html)」アプリのバージョンアップが終了し、利用していたAlexaスキルも使えなくなったため、パソコンから対応アンプを操作できるアプリとしてNAVAを作りました。
 
 **[Windows 11 x64用インストーラーをダウンロード](https://github.com/azuki2anko/NAVA/releases/download/v0.1.0/NAVA-0.1.0-win-x64-setup.exe)**
 
