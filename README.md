@@ -8,6 +8,28 @@ YAMAHAの「[AV CONTROLLER](https://jp.yamaha.com/products/audio_visual/apps/av_
 
 インストールせずに使う場合は、[Portable版ZIP](https://github.com/azuki2anko/NAVA/releases/download/v0.1.0/NAVA-0.1.0-win-x64-portable.zip)を利用できます。
 
+**[利用説明書を読む](doc/USER_GUIDE.md)**
+
+### 「一般的にダウンロードされていません」と表示された場合
+
+NAVA 0.1.0はコード署名されていないため、初回のダウンロードや実行時にMicrosoft Defender SmartScreenの評判警告が表示される場合があります。警告が出たら、最初に次の2点を確認してください。
+
+1. ダウンロード元がこのリポジトリの[正式なRelease](https://github.com/azuki2anko/NAVA/releases/tag/v0.1.0)であること。
+2. ダウンロードしたファイルのSHA-256が[`SHA256SUMS.txt`](https://github.com/azuki2anko/NAVA/releases/download/v0.1.0/SHA256SUMS.txt)と一致すること。
+
+SHA-256はPowerShellで確認できます。
+
+```powershell
+Get-FileHash .\NAVA-0.1.0-win-x64-setup.exe -Algorithm SHA256
+Get-FileHash .\NAVA-0.1.0-win-x64-portable.zip -Algorithm SHA256
+```
+
+確認後もMicrosoft Edgeに「一般的にダウンロードされていません」と表示される場合は、ダウンロード一覧で対象ファイルの「…」→「保持」→「詳細表示」→「保持」を選びます。表示名はEdgeのバージョンによって多少異なる場合があります。
+
+Portable版を展開して`NAVA.exe`を開いたときに「WindowsによってPCが保護されました」または信用できるソフトウェアか確認する画面が出た場合は、「詳細情報」でアプリ名が`NAVA.exe`であることを確認し、上記の配布元とSHA-256を確認済みの場合だけ「実行」を選択してください。「不明な発行元」と表示されるのは、現在の配布物が未署名のためです。
+
+警告が「不明」「一般的にダウンロードされていない」ではなく、マルウェアや脅威を検出したという内容の場合は実行せず、ダウンロードしたファイルを削除してIssueで報告してください。SmartScreenやウイルス対策機能そのものを無効にする必要はありません。
+
 Windows 11からYamaha Extended Control対応アンプを操作する、Capability駆動のタスクトレイ常駐アプリです。リモコンの完全再現ではなく、PC用アンプとして使うMain Zoneの日常操作へ重点を置いています。
 
 > [!IMPORTANT]
