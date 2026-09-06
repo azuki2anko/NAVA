@@ -19,6 +19,7 @@ public partial class CompactPowerWindow : Window
     private bool _positionInitialized;
     private bool _operationInProgress;
     private DisplayGeometry? _lastDisplayGeometry;
+    private const double WorkAreaSafetyMargin = 2;
 
     public CompactPowerWindow(
         IDeviceManager deviceManager,
@@ -36,6 +37,7 @@ public partial class CompactPowerWindow : Window
         _deviceManager.SnapshotChanged += DeviceManager_SnapshotChanged;
         _orchestrator.StateChanged += Orchestrator_StateChanged;
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged += SystemEvents_DisplaySettingsChanged;
+        Microsoft.Win32.SystemEvents.UserPreferenceChanged += SystemEvents_UserPreferenceChanged;
         UpdateState(_deviceManager.Snapshot);
     }
 
@@ -44,6 +46,13 @@ public partial class CompactPowerWindow : Window
         Show();
         WindowState = WindowState.Normal;
         Topmost = true;
+        Dispatcher.BeginInvoke(async () =>
+        {
+            if (ClampToCurrentMonitorWorkArea())
+            {
+                await SavePlacementAsync();
+            }
+        });
     }
 
     public void AllowClose() => _allowClose = true;
@@ -71,6 +80,7 @@ public partial class CompactPowerWindow : Window
         if (e.ChangedButton == System.Windows.Input.MouseButton.Left)
         {
             DragMove();
+            ClampToCurrentMonitorWorkArea();
             await SavePlacementAsync();
         }
     }
@@ -188,9 +198,15 @@ public partial class CompactPowerWindow : Window
             }
         }
 
-        if (!restored)
+        var placementAdjusted = ClampToCurrentMonitorWorkArea();
+        if (!restored || placementAdjusted)
         {
-            ResetToDefaultPosition();
+            if (!restored)
+            {
+                ResetToDefaultPosition();
+                ClampToCurrentMonitorWorkArea();
+            }
+
             await SavePlacementAsync();
         }
     }
@@ -240,7 +256,11 @@ public partial class CompactPowerWindow : Window
 
         if (message == wmExitSizeMove)
         {
-            Dispatcher.BeginInvoke(async () => await SavePlacementAsync());
+            Dispatcher.BeginInvoke(async () =>
+            {
+                ClampToCurrentMonitorWorkArea();
+                await SavePlacementAsync();
+            });
             return IntPtr.Zero;
         }
 
@@ -322,11 +342,78 @@ public partial class CompactPowerWindow : Window
             await SavePlacementAsync();
         });
 
+    private void SystemEvents_UserPreferenceChanged(
+        object? sender,
+        Microsoft.Win32.UserPreferenceChangedEventArgs e) =>
+        Dispatcher.BeginInvoke(async () =>
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(300));
+            if (IsLoaded && ClampToCurrentMonitorWorkArea())
+            {
+                await SavePlacementAsync();
+            }
+        });
+
     private void ResetToDefaultPosition()
     {
         var workArea = SystemParameters.WorkArea;
         Left = workArea.Right - ActualWidth - 10;
         Top = workArea.Top + 10;
+    }
+
+    private bool ClampToCurrentMonitorWorkArea()
+    {
+        var workArea = GetCurrentMonitorWorkArea();
+        if (workArea.IsEmpty)
+        {
+            return false;
+        }
+
+        var width = ActualWidth > 0 ? ActualWidth : Width;
+        var height = ActualHeight > 0 ? ActualHeight : Height;
+        var minimumLeft = workArea.Left + WorkAreaSafetyMargin;
+        var minimumTop = workArea.Top + WorkAreaSafetyMargin;
+        var maximumLeft = Math.Max(minimumLeft, workArea.Right - width - WorkAreaSafetyMargin);
+        var maximumTop = Math.Max(minimumTop, workArea.Bottom - height - WorkAreaSafetyMargin);
+        var clampedLeft = Math.Clamp(Left, minimumLeft, maximumLeft);
+        var clampedTop = Math.Clamp(Top, minimumTop, maximumTop);
+        var changed = Math.Abs(clampedLeft - Left) >= 0.1 || Math.Abs(clampedTop - Top) >= 0.1;
+        Left = clampedLeft;
+        Top = clampedTop;
+        return changed;
+    }
+
+    private Rect GetCurrentMonitorWorkArea()
+    {
+        var windowHandle = new WindowInteropHelper(this).Handle;
+        if (windowHandle == IntPtr.Zero)
+        {
+            return SystemParameters.WorkArea;
+        }
+
+        const uint monitorDefaultToNearest = 2;
+        var monitorHandle = MonitorFromWindow(windowHandle, monitorDefaultToNearest);
+        var monitorInfo = new MonitorInfo
+        {
+            Size = Marshal.SizeOf<MonitorInfo>()
+        };
+        if (monitorHandle == IntPtr.Zero || !GetMonitorInfo(monitorHandle, ref monitorInfo))
+        {
+            return SystemParameters.WorkArea;
+        }
+
+        // PointFromScreen keeps the conversion correct when monitors use different DPI scales.
+        var topLeft = PointFromScreen(new System.Windows.Point(
+            monitorInfo.WorkArea.Left,
+            monitorInfo.WorkArea.Top));
+        var bottomRight = PointFromScreen(new System.Windows.Point(
+            monitorInfo.WorkArea.Right,
+            monitorInfo.WorkArea.Bottom));
+        return new Rect(
+            Left + topLeft.X,
+            Top + topLeft.Y,
+            Math.Max(0, bottomRight.X - topLeft.X),
+            Math.Max(0, bottomRight.Y - topLeft.Y));
     }
 
     private static void ConfigureNonActivatingOverlay(IntPtr windowHandle)
@@ -423,6 +510,7 @@ public partial class CompactPowerWindow : Window
             _deviceManager.SnapshotChanged -= DeviceManager_SnapshotChanged;
             _orchestrator.StateChanged -= Orchestrator_StateChanged;
             Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= SystemEvents_DisplaySettingsChanged;
+            Microsoft.Win32.SystemEvents.UserPreferenceChanged -= SystemEvents_UserPreferenceChanged;
             _windowSource?.RemoveHook(WindowMessageHook);
             return;
         }
@@ -432,6 +520,24 @@ public partial class CompactPowerWindow : Window
     }
 
     private readonly record struct DisplayGeometry(double Left, double Top, double Width, double Height);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeRect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MonitorInfo
+    {
+        public int Size;
+        public NativeRect MonitorArea;
+        public NativeRect WorkArea;
+        public uint Flags;
+    }
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(
@@ -445,4 +551,11 @@ public partial class CompactPowerWindow : Window
 
     [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
     private static extern IntPtr SetWindowLongPtr(IntPtr windowHandle, int index, IntPtr newValue);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr windowHandle, uint flags);
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetMonitorInfo(IntPtr monitorHandle, ref MonitorInfo monitorInfo);
 }
