@@ -51,6 +51,10 @@ public partial class App : System.Windows.Application
                 RequestExit);
             _settingsWindow.StartMinimizedToTray();
             _mainWindow.Show();
+            if (settings.ShowCompactPowerOnStartup)
+            {
+                _compactPowerWindow.ShowFromTray();
+            }
         }
         catch (Exception exception)
         {

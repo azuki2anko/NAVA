@@ -14,6 +14,7 @@ public sealed class JsonSettingsStoreTests
                 ManualHost = "receiver.local",
                 PreferredDeviceId = "example-device-id",
                 ShowCompactPowerStatus = true,
+                ShowCompactPowerOnStartup = true,
                 MinimizeToTray = false,
                 RequestTimeoutSeconds = 7,
                 LocalApi = new LocalApiSettings { BindAddress = "127.0.0.1", Port = 55274 },
@@ -36,6 +37,7 @@ public sealed class JsonSettingsStoreTests
             Assert.Equal(expected.ManualHost, actual.ManualHost);
             Assert.Equal(expected.PreferredDeviceId, actual.PreferredDeviceId);
             Assert.True(actual.ShowCompactPowerStatus);
+            Assert.True(actual.ShowCompactPowerOnStartup);
             Assert.False(actual.MinimizeToTray);
             Assert.Equal(7, actual.RequestTimeoutSeconds);
             Assert.Equal(55274, actual.LocalApi.Port);
@@ -70,6 +72,7 @@ public sealed class JsonSettingsStoreTests
 
             Assert.Empty(loaded.Activities);
             Assert.Empty(loaded.PowerOnBlockers);
+            Assert.False(loaded.ShowCompactPowerOnStartup);
             Assert.True(loaded.MinimizeToTray);
             Assert.Equal(HotkeyActionIds.PowerToggle, loaded.GlobalHotkeys[0].ActionId);
             Assert.Equal(HotkeyActionIds.MuteToggle, loaded.GlobalHotkeys[1].ActionId);

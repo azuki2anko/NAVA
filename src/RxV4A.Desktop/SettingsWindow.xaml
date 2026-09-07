@@ -208,6 +208,12 @@
                           Click="MinimizeToTrayCheckBox_Click" />
                 <TextBlock x:Name="MinimizeBehaviorStatusText"
                            Foreground="Gray" Margin="22,4,0,0" TextWrapping="Wrap" />
+                <CheckBox x:Name="ShowCompactPowerOnStartupCheckBox"
+                          Content="起動時にミニ電源操作を表示する"
+                          Margin="0,12,0,0"
+                          Click="ShowCompactPowerOnStartupCheckBox_Click" />
+                <TextBlock x:Name="CompactPowerStartupStatusText"
+                           Foreground="Gray" Margin="22,4,0,0" TextWrapping="Wrap" />
                 <CheckBox x:Name="StartWithWindowsCheckBox"
                           Content="Windows起動時に実行させる"
                           Margin="0,12,0,0"

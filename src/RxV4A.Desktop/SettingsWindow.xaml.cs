@@ -57,6 +57,8 @@ public partial class SettingsWindow : Window
         InitializeComponent();
         MinimizeToTrayCheckBox.IsChecked = _settings.MinimizeToTray;
         UpdateMinimizeBehaviorStatus();
+        ShowCompactPowerOnStartupCheckBox.IsChecked = _settings.ShowCompactPowerOnStartup;
+        UpdateCompactPowerStartupStatus();
         try
         {
             _windowsStartup = new WindowsStartupService();
@@ -301,6 +303,41 @@ public partial class SettingsWindow : Window
         MinimizeBehaviorStatusText.Text = _settings.MinimizeToTray
             ? "最小化するとタスクトレイへ収納します。"
             : "最小化してもタスクバーにアイコンを残します。";
+    }
+
+    private async void ShowCompactPowerOnStartupCheckBox_Click(object sender, RoutedEventArgs e)
+    {
+        var requested = ShowCompactPowerOnStartupCheckBox.IsChecked == true;
+        bool previous;
+        lock (_settings.SyncRoot)
+        {
+            previous = _settings.ShowCompactPowerOnStartup;
+            _settings.ShowCompactPowerOnStartup = requested;
+        }
+
+        UpdateCompactPowerStartupStatus();
+        try
+        {
+            await _settingsStore.SaveAsync(_settings);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            lock (_settings.SyncRoot)
+            {
+                _settings.ShowCompactPowerOnStartup = previous;
+            }
+
+            ShowCompactPowerOnStartupCheckBox.IsChecked = previous;
+            UpdateCompactPowerStartupStatus();
+            ShowUiOperationError(exception);
+        }
+    }
+
+    private void UpdateCompactPowerStartupStatus()
+    {
+        CompactPowerStartupStatusText.Text = _settings.ShowCompactPowerOnStartup
+            ? "次回からNAVAの起動時にミニ電源操作を表示します。"
+            : "起動時はミニ電源操作を表示しません。";
     }
 
     private async void StartWithWindowsCheckBox_Click(object sender, RoutedEventArgs e)

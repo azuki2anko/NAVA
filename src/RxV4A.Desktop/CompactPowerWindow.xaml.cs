@@ -10,14 +10,18 @@ namespace RxV4A.Desktop;
 
 public partial class CompactPowerWindow : Window
 {
+    private static readonly TimeSpan DeviceConfirmationTimeout = TimeSpan.FromSeconds(4);
     private readonly IDeviceManager _deviceManager;
     private readonly IControlOrchestrator _orchestrator;
     private readonly AppSettings _settings;
     private readonly ISettingsStore _settingsStore;
+    private readonly object _commandQueueSync = new();
+    private Task _commandQueue = Task.CompletedTask;
     private HwndSource? _windowSource;
     private bool _allowClose;
     private bool _positionInitialized;
-    private bool _operationInProgress;
+    private bool? _pendingPowerState;
+    private long _powerRevision;
     private DisplayGeometry? _lastDisplayGeometry;
     private const double WorkAreaSafetyMargin = 2;
 
@@ -64,15 +68,21 @@ public partial class CompactPowerWindow : Window
         StateColumn.Width = new GridLength(showStatus ? 14 : 0);
     }
 
-    private async void PowerToggleButton_Click(object sender, RoutedEventArgs e)
+    private void PowerToggleButton_PreviewMouseLeftButtonDown(
+        object sender,
+        System.Windows.Input.MouseButtonEventArgs e)
     {
-        var target = string.Equals(
+        if (e.ChangedButton != System.Windows.Input.MouseButton.Left || !PowerToggleButton.IsEnabled)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        var displayedPowerOn = _pendingPowerState ?? string.Equals(
             _deviceManager.Snapshot.MainZone?.Power,
             "on",
-            StringComparison.OrdinalIgnoreCase)
-            ? MainPower.Standby
-            : MainPower.On;
-        await SetPowerAsync(target);
+            StringComparison.OrdinalIgnoreCase);
+        BeginPowerChange(displayedPowerOn ? MainPower.Standby : MainPower.On);
     }
 
     private async void DragGrip_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
@@ -85,42 +95,46 @@ public partial class CompactPowerWindow : Window
         }
     }
 
-    private async Task SetPowerAsync(MainPower power)
+    private void BeginPowerChange(MainPower power)
     {
-        if (_operationInProgress)
-        {
-            return;
-        }
+        var targetIsOn = power == MainPower.On;
+        var revision = ++_powerRevision;
+        _pendingPowerState = targetIsOn;
+        ApplyPowerVisual(targetIsOn, confirming: true);
 
-        _operationInProgress = true;
-        UpdateButtons();
-        try
+        EnqueueCommand(async () =>
         {
-            var result = await _orchestrator.SetPowerAsync(power, allowBlockedOn: false);
-            if (result.Outcome == ControlOutcome.Blocked)
+            try
             {
-                StateText.Text = "ON禁止中";
-                StateIndicator.Fill = MediaBrushes.DarkOrange;
-                ToolTip = result.Message;
+                var result = await _orchestrator.SetPowerAsync(power, allowBlockedOn: false)
+                    .ConfigureAwait(false);
+                var snapshot = result.Outcome is ControlOutcome.Succeeded or ControlOutcome.AlreadySatisfied
+                    ? await ConfirmDeviceStateAsync(state => string.Equals(
+                            state.MainZone?.Power,
+                            targetIsOn ? "on" : "standby",
+                            StringComparison.OrdinalIgnoreCase))
+                        .ConfigureAwait(false)
+                    : _deviceManager.Snapshot;
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    if (revision != _powerRevision)
+                    {
+                        return;
+                    }
+
+                    _pendingPowerState = null;
+                    UpdateState(snapshot);
+                    if (result.Outcome is ControlOutcome.Blocked or ControlOutcome.Failed or ControlOutcome.PartialFailure)
+                    {
+                        ToolTip = result.Message;
+                    }
+                });
             }
-            else if (result.Outcome is ControlOutcome.Failed or ControlOutcome.PartialFailure)
+            catch (Exception exception)
             {
-                StateText.Text = "操作失敗";
-                StateIndicator.Fill = MediaBrushes.IndianRed;
-                ToolTip = result.Message;
+                await Dispatcher.InvokeAsync(() => FailPowerChange(revision, exception));
             }
-        }
-        catch (Exception)
-        {
-            StateText.Text = "操作失敗";
-            StateIndicator.Fill = MediaBrushes.IndianRed;
-            ToolTip = "操作を完了できませんでした。ログを確認してください。";
-        }
-        finally
-        {
-            _operationInProgress = false;
-            UpdateButtons();
-        }
+        });
     }
 
     private void DeviceManager_SnapshotChanged(object? sender, DeviceSnapshot snapshot) =>
@@ -132,7 +146,11 @@ public partial class CompactPowerWindow : Window
     private void UpdateState(DeviceSnapshot snapshot)
     {
         ToolTip = null;
-        if (snapshot.ConnectionState != DeviceConnectionState.Connected)
+        if (_pendingPowerState is bool pendingPowerOn)
+        {
+            ApplyPowerVisual(pendingPowerOn, confirming: true);
+        }
+        else if (snapshot.ConnectionState != DeviceConnectionState.Connected)
         {
             StateText.Text = "未接続";
             StateIndicator.Fill = MediaBrushes.Gray;
@@ -152,7 +170,9 @@ public partial class CompactPowerWindow : Window
         }
 
         var blockers = _orchestrator.ActiveBlockers;
-        if (blockers.Count > 0 && !string.Equals(snapshot.MainZone?.Power, "on", StringComparison.OrdinalIgnoreCase))
+        if (_pendingPowerState is null &&
+            blockers.Count > 0 &&
+            !string.Equals(snapshot.MainZone?.Power, "on", StringComparison.OrdinalIgnoreCase))
         {
             StateText.Text = "ON禁止中";
             StateIndicator.Fill = MediaBrushes.DarkOrange;
@@ -164,10 +184,82 @@ public partial class CompactPowerWindow : Window
 
     private void UpdateButtons()
     {
-        var canOperate = !_operationInProgress &&
-                         _deviceManager.Snapshot.ConnectionState == DeviceConnectionState.Connected &&
+        var canOperate = _deviceManager.Snapshot.ConnectionState == DeviceConnectionState.Connected &&
                          _deviceManager.Snapshot.Capabilities?.SupportsZoneFunction("main", "power") == true;
         PowerToggleButton.IsEnabled = canOperate;
+    }
+
+    private void ApplyPowerVisual(bool powerOn, bool confirming)
+    {
+        PowerToggleButton.Tag = powerOn ? "On" : "Off";
+        StateText.Text = powerOn ? "ON" : "OFF";
+        StateIndicator.Fill = powerOn ? MediaBrushes.LimeGreen : MediaBrushes.SlateGray;
+        ToolTip = confirming ? "実機の電源状態を確認しています。" : null;
+    }
+
+    private async Task<DeviceSnapshot> ConfirmDeviceStateAsync(Func<DeviceSnapshot, bool> targetReached)
+    {
+        var confirmationDelays = new[]
+        {
+            TimeSpan.FromMilliseconds(150),
+            TimeSpan.FromMilliseconds(300),
+            TimeSpan.FromMilliseconds(600),
+            TimeSpan.FromMilliseconds(1000)
+        };
+        using var timeout = new CancellationTokenSource(DeviceConfirmationTimeout);
+
+        var snapshot = _deviceManager.Snapshot;
+        if (targetReached(snapshot))
+        {
+            return snapshot;
+        }
+
+        try
+        {
+            foreach (var delay in confirmationDelays)
+            {
+                await Task.Delay(delay, timeout.Token).ConfigureAwait(false);
+                await _deviceManager.RefreshAsync(timeout.Token).ConfigureAwait(false);
+                snapshot = _deviceManager.Snapshot;
+                if (targetReached(snapshot))
+                {
+                    return snapshot;
+                }
+            }
+        }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        {
+            throw new TimeoutException("The compact power status confirmation timed out.");
+        }
+
+        throw new TimeoutException("The receiver did not report the requested compact power state in time.");
+    }
+
+    private void EnqueueCommand(Func<Task> command)
+    {
+        lock (_commandQueueSync)
+        {
+            _commandQueue = _commandQueue.ContinueWith(
+                    async _ => await command().ConfigureAwait(false),
+                    CancellationToken.None,
+                    TaskContinuationOptions.None,
+                    TaskScheduler.Default)
+                .Unwrap();
+        }
+    }
+
+    private void FailPowerChange(long revision, Exception exception)
+    {
+        if (revision != _powerRevision)
+        {
+            return;
+        }
+
+        _pendingPowerState = null;
+        UpdateState(_deviceManager.Snapshot);
+        ToolTip = exception is TimeoutException
+            ? "実機の状態確認がタイムアウトしました。取得できた状態へ表示を戻しました。"
+            : "操作を完了できませんでした。取得できた実機状態へ表示を戻しました。";
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)

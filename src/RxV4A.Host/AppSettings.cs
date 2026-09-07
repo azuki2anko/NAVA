@@ -18,6 +18,8 @@ public sealed class AppSettings
 
     public bool ShowCompactPowerStatus { get; set; }
 
+    public bool ShowCompactPowerOnStartup { get; set; }
+
     public bool MinimizeToTray { get; set; } = true;
 
     public string? PreferredDeviceId { get; set; }
