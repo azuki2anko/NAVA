@@ -6,8 +6,8 @@
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
-    <PackageReference Include="Microsoft.OpenApi" Version="2.12.2" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.15" />
+    <PackageReference Include="Microsoft.OpenApi" Version="2.13.0" />
   </ItemGroup>
 
   <PropertyGroup>
